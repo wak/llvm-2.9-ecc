@@ -34,4 +34,23 @@ projects/*
 !projects/CMakeLists.txt
 !projects/Makefile
 # Clang, which is tracked independently.
+
+# by wak
 tools/clang
+Debug/
+Debug+Asserts/
+Debug+Profile/
+Debug+Profile+Asserts/
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+config.log
+config.status
+Makefile.config
+llvm.spec
+include/llvm/Config/*.def
+include/llvm/Config/*.h
+gmon.out
+projects/sample/Makefile.common
+include/llvm/Intrinsics.gen
