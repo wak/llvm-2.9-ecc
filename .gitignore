@@ -54,3 +54,4 @@ include/llvm/Config/*.h
 gmon.out
 projects/sample/Makefile.common
 include/llvm/Intrinsics.gen
+include/llvm/Support/DataTypes.h
