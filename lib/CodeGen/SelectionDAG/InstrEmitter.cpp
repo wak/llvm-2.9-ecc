@@ -28,6 +28,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 /// CountResults - The results of target nodes have register or immediate
@@ -637,6 +639,7 @@ InstrEmitter::EmitDbgValue(SDDbgValue *SD,
 /// EmitMachineNode - Generate machine code for a target-specific node and
 /// needed dependencies.
 ///
+/// EmitMachineNode - ノードとノードが依存しているやつらのターゲット特有のマシンコード生成する．
 void InstrEmitter::
 EmitMachineNode(SDNode *Node, bool IsClone, bool IsCloned,
                 DenseMap<SDValue, unsigned> &VRBaseMap) {
@@ -682,7 +685,10 @@ EmitMachineNode(SDNode *Node, bool IsClone, bool IsCloned,
 #endif
 
   // Create the new machine instruction.
+  // wak: 新しいマシン命令を生成する
   MachineInstr *MI = BuildMI(*MF, Node->getDebugLoc(), II);
+  if (OptWakDebugAroundMBB)
+    errs() << "wak: BuildMI [" << II.getName() << "]\n";
 
   // The MachineInstr constructor adds implicit-def operands. Scan through
   // these to determine which are dead.

@@ -22,9 +22,15 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetRegistry.h"
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
+#include <cstdio>
 static MCAsmInfo *createMCAsmInfo(const Target &T, StringRef TT) {
+  if (OptWakDebugPass)
+	fprintf(stderr, "I am createMCAsmInfo\n");
   Triple TheTriple(TT);
   switch (TheTriple.getOS()) {
   case Triple::Darwin:
@@ -62,8 +68,10 @@ static MCStreamer *createMCStreamer(const Target &T, const std::string &TT,
     return createELFStreamer(Ctx, TAB, _OS, _Emitter, RelaxAll, NoExecStack);
   }
 }
-
+#include <cstdio>
 extern "C" void LLVMInitializeX86Target() {
+  if (OptWakDebugPass)
+    fprintf(stderr, "I am LLVMInitializeX86Target =>\n");
   // Register the target.
   RegisterTargetMachine<X86_32TargetMachine> X(TheX86_32Target);
   RegisterTargetMachine<X86_64TargetMachine> Y(TheX86_64Target);
@@ -89,6 +97,8 @@ extern "C" void LLVMInitializeX86Target() {
                                          createMCStreamer);
   TargetRegistry::RegisterObjectStreamer(TheX86_64Target,
                                          createMCStreamer);
+  if (OptWakDebugPass)
+    fprintf(stderr, "<= LLVMInitializeX86Target\n");
 }
 
 
@@ -116,6 +126,8 @@ X86_64TargetMachine::X86_64TargetMachine(const Target &T, const std::string &TT,
     TSInfo(*this),
     TLInfo(*this),
     JITInfo(*this) {
+  if (OptWakDebugPass)
+	fprintf(stderr, "I am X86_64TargetMachine\n");
 }
 
 /// X86TargetMachine ctor - Create an X86 target.
@@ -262,4 +274,11 @@ void X86TargetMachine::setCodeModelForJIT() {
     setCodeModel(CodeModel::Large);
   else
     setCodeModel(CodeModel::Small);
+}
+
+bool X86TargetMachine::addWakTest(PassManagerBase &PM, CodeGenOpt::Level OptLevel) {
+  PM.add(createX86WakTest(*this, OptLevel));
+  if (OptWakDebugPass)
+    errs() << "wak: my test pass added";
+  return false;
 }

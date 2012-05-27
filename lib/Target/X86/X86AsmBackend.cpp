@@ -26,6 +26,9 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetRegistry.h"
 #include "llvm/Target/TargetAsmBackend.h"
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 static unsigned getFixupKindLog2Size(unsigned Kind) {
@@ -406,8 +409,11 @@ public:
 
 } // end anonymous namespace
 
+#include <cstdio>
 TargetAsmBackend *llvm::createX86_32AsmBackend(const Target &T,
                                                const std::string &TT) {
+  if (OptWakDebugSay)
+	fprintf(stderr, "wak: I am createX86_32AsmBackend\n");
   switch (Triple(TT).getOS()) {
   case Triple::Darwin:
     return new DarwinX86_32AsmBackend(T);
@@ -422,9 +428,10 @@ TargetAsmBackend *llvm::createX86_32AsmBackend(const Target &T,
     return new ELFX86_32AsmBackend(T, Triple(TT).getOS());
   }
 }
-
 TargetAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
                                                const std::string &TT) {
+  if (OptWakDebugSay)
+	fprintf(stderr, "wak: I am createX86_64AsmBackend\n");
   switch (Triple(TT).getOS()) {
   case Triple::Darwin:
     return new DarwinX86_64AsmBackend(T);

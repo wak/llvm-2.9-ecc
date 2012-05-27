@@ -1541,6 +1541,7 @@ static bool HasNoSignedComparisonUses(SDNode *N) {
   return true;
 }
 
+// wak: x86命令選択のためのメソッド
 SDNode *X86DAGToDAGISel::Select(SDNode *Node) {
   EVT NVT = Node->getValueType(0);
   unsigned Opc, MOpc;

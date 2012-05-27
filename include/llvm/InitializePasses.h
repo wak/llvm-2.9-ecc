@@ -19,6 +19,9 @@ namespace llvm {
 
 class PassRegistry;
 
+// wak
+void initializeWakTestPass(PassRegistry&);
+
 /// initializeCore - Initialize all passes linked into the
 /// TransformUtils library.
 void initializeCore(PassRegistry&);
@@ -121,6 +124,9 @@ void initializeLibCallAliasAnalysisPass(PassRegistry&);
 void initializeLintPass(PassRegistry&);
 void initializeLiveDebugVariablesPass(PassRegistry&);
 void initializeLiveIntervalsPass(PassRegistry&);
+// - wak -------------
+void initializeWakEccCheckPass(PassRegistry&);
+// ---------------- wak
 void initializeLiveStacksPass(PassRegistry&);
 void initializeLiveVariablesPass(PassRegistry&);
 void initializeLoaderPassPass(PassRegistry&);

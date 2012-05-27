@@ -95,6 +95,8 @@ protected:
 
   Value(const Type *Ty, unsigned scid);
 public:
+  // wak
+  bool isecc;
   virtual ~Value();
 
   /// dump - Support for debugging, callable in GDB: V->dump()

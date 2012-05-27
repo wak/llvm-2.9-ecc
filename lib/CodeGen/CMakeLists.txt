@@ -93,6 +93,7 @@ add_llvm_library(LLVMCodeGen
   UnreachableBlockElim.cpp
   VirtRegMap.cpp
   VirtRegRewriter.cpp
+  WakEccCheckPass.cpp
   )
 
 add_subdirectory(SelectionDAG)

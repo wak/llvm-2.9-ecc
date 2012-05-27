@@ -18,6 +18,9 @@
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ELF.h"
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 enum AsmWriterFlavorTy {
@@ -72,13 +75,16 @@ X86MCAsmInfoDarwin::X86MCAsmInfoDarwin(const Triple &Triple) {
   ExceptionsType = ExceptionHandling::DwarfTable;
 }
 
+#include <cstdio>
 X86ELFMCAsmInfo::X86ELFMCAsmInfo(const Triple &T) {
+  if (OptWakDebugSay)
+	fprintf(stderr, "I am X86ELFMCAsmInfo\n");
   AsmTransCBE = x86_asm_table;
   AssemblerDialect = AsmWriterFlavor;
 
   TextAlignFillValue = 0x90;
 
-  PrivateGlobalPrefix = ".L";
+  PrivateGlobalPrefix = ".Lmofu";	     // wak
   WeakRefDirective = "\t.weak\t";
   PCSymbol = ".";
 

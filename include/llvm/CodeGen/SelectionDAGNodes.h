@@ -200,6 +200,12 @@ template<> struct simplify_type<const SDValue> {
 /// pointer to the SDNode using the value, and Next and Prev pointers,
 /// which link together all the uses of an SDNode.
 ///
+// wak: SDUse - SDNodeの活用?について表現する．このクラスは，
+//      - [Val] SDValue, このSDUseが使われているSDNodeと結果の数値 ?
+//      - [User] このSDUseを使っているSDNodeへのポインタ
+//      - [Priv, Next] 次と前のポインタ
+//     を保持する
+//
 class SDUse {
   /// Val - The value being used.
   SDValue Val;
@@ -348,6 +354,9 @@ public:
   //===--------------------------------------------------------------------===//
   //  Accessors
   //
+
+  // wak
+  virtual const char *getClassName() const { return "SDNode"; }
 
   /// getOpcode - Return the SelectionDAG opcode value for this node. For
   /// pre-isel nodes (those for which isMachineOpcode returns false), these
@@ -807,6 +816,7 @@ inline void SDUse::setNode(SDNode *N) {
 class UnarySDNode : public SDNode {
   SDUse Op;
 public:
+  virtual const char *getClassName() const { return "UnarySDNode"; } // wak
   UnarySDNode(unsigned Opc, DebugLoc dl, SDVTList VTs, SDValue X)
     : SDNode(Opc, dl, VTs) {
     InitOperands(&Op, X);
@@ -818,6 +828,7 @@ public:
 class BinarySDNode : public SDNode {
   SDUse Ops[2];
 public:
+  virtual const char *getClassName() const { return "BinarySDNode"; } // wak
   BinarySDNode(unsigned Opc, DebugLoc dl, SDVTList VTs, SDValue X, SDValue Y)
     : SDNode(Opc, dl, VTs) {
     InitOperands(Ops, X, Y);
@@ -829,6 +840,7 @@ public:
 class TernarySDNode : public SDNode {
   SDUse Ops[3];
 public:
+  virtual const char *getClassName() const { return "TernarySDNode"; } // wak
   TernarySDNode(unsigned Opc, DebugLoc dl, SDVTList VTs, SDValue X, SDValue Y,
                 SDValue Z)
     : SDNode(Opc, dl, VTs) {
@@ -844,6 +856,7 @@ public:
 class HandleSDNode : public SDNode {
   SDUse Op;
 public:
+  virtual const char *getClassName() const { return "HandleSDNode"; } // wak
   // FIXME: Remove the "noinline" attribute once <rdar://problem/5852746> is
   // fixed.
 #if __GNUC__==4 && __GNUC_MINOR__==2 && defined(__APPLE__) && !defined(__llvm__)
@@ -865,6 +878,8 @@ private:
   EVT MemoryVT;
 
 protected:
+  virtual const char *getClassName() const { return "MemSDNode"; } // wak
+
   /// MMO - Memory reference information.
   MachineMemOperand *MMO;
 
@@ -959,6 +974,8 @@ class AtomicSDNode : public MemSDNode {
   SDUse Ops[4];
 
 public:
+  virtual const char *getClassName() const { return "AtomicSDNode"; } // wak
+
   // Opc:   opcode for atomic
   // VTL:    value type list
   // Chain:  memory chain for operaand
@@ -1016,6 +1033,8 @@ public:
 /// with a value not less than FIRST_TARGET_MEMORY_OPCODE.
 class MemIntrinsicSDNode : public MemSDNode {
 public:
+  virtual const char *getClassName() const { return "MemIntrinsicSDNode"; } // wak
+
   MemIntrinsicSDNode(unsigned Opc, DebugLoc dl, SDVTList VTs,
                      const SDValue *Ops, unsigned NumOps,
                      EVT MemoryVT, MachineMemOperand *MMO)
@@ -1056,6 +1075,7 @@ protected:
     InitOperands(Ops, N1, N2);
   }
 public:
+  virtual const char *getClassName() const { return "ShuffleVectorSDNode"; } // wak
 
   void getMask(SmallVectorImpl<int> &M) const {
     EVT VT = getValueType(0);
@@ -1094,6 +1114,7 @@ class ConstantSDNode : public SDNode {
              DebugLoc(), getSDVTList(VT)), Value(val) {
   }
 public:
+  virtual const char *getClassName() const { return "ConstantSDNode"; } // wak
 
   const ConstantInt *getConstantIntValue() const { return Value; }
   const APInt &getAPIntValue() const { return Value->getValue(); }
@@ -1119,7 +1140,7 @@ class ConstantFPSDNode : public SDNode {
              DebugLoc(), getSDVTList(VT)), Value(val) {
   }
 public:
-
+  virtual const char *getClassName() const { return "ConstantFPSDNode"; } // wak
   const APFloat& getValueAPF() const { return Value->getValueAPF(); }
   const ConstantFP *getConstantFPValue() const { return Value; }
 
@@ -1166,6 +1187,7 @@ class GlobalAddressSDNode : public SDNode {
   GlobalAddressSDNode(unsigned Opc, DebugLoc DL, const GlobalValue *GA, EVT VT,
                       int64_t o, unsigned char TargetFlags);
 public:
+  virtual const char *getClassName() const { return "GlobalAddressSDNode"; } // wak
 
   const GlobalValue *getGlobal() const { return TheGlobal; }
   int64_t getOffset() const { return Offset; }
@@ -1190,6 +1212,7 @@ class FrameIndexSDNode : public SDNode {
       DebugLoc(), getSDVTList(VT)), FI(fi) {
   }
 public:
+  virtual const char *getClassName() const { return "FrameIndexSDNode"; } // wak
 
   int getIndex() const { return FI; }
 
@@ -1209,6 +1232,7 @@ class JumpTableSDNode : public SDNode {
       DebugLoc(), getSDVTList(VT)), JTI(jti), TargetFlags(TF) {
   }
 public:
+  virtual const char *getClassName() const { return "JumpTableSDNode"; } // wak
 
   int getIndex() const { return JTI; }
   unsigned char getTargetFlags() const { return TargetFlags; }
@@ -1247,7 +1271,7 @@ class ConstantPoolSDNode : public SDNode {
     Offset |= 1 << (sizeof(unsigned)*CHAR_BIT-1);
   }
 public:
-  
+    virtual const char *getClassName() const { return "ConstantPoolSDNode"; } // wak
 
   bool isMachineConstantPoolEntry() const {
     return (int)Offset < 0;
@@ -1291,6 +1315,7 @@ class BasicBlockSDNode : public SDNode {
     : SDNode(ISD::BasicBlock, DebugLoc(), getSDVTList(MVT::Other)), MBB(mbb) {
   }
 public:
+  virtual const char *getClassName() const { return "BasicBlockSDNode"; } // wak
 
   MachineBasicBlock *getBasicBlock() const { return MBB; }
 
@@ -1306,6 +1331,8 @@ class BuildVectorSDNode : public SDNode {
   // These are constructed as SDNodes and then cast to BuildVectorSDNodes.
   explicit BuildVectorSDNode();        // Do not implement
 public:
+  virtual const char *getClassName() const { return "BuildVectorSDNode"; } // wak
+
   /// isConstantSplat - Check if this is a constant splat, and if so, find the
   /// smallest element size that splats the vector.  If MinSplatBits is
   /// nonzero, the element size must be at least that large.  Note that the
@@ -1337,6 +1364,8 @@ class SrcValueSDNode : public SDNode {
     : SDNode(ISD::SRCVALUE, DebugLoc(), getSDVTList(MVT::Other)), V(v) {}
 
 public:
+  virtual const char *getClassName() const { return "SrcValueSDNode"; } // wak
+
   /// getValue - return the contained Value.
   const Value *getValue() const { return V; }
 
@@ -1352,6 +1381,7 @@ class MDNodeSDNode : public SDNode {
   explicit MDNodeSDNode(const MDNode *md)
   : SDNode(ISD::MDNODE_SDNODE, DebugLoc(), getSDVTList(MVT::Other)), MD(md) {}
 public:
+  virtual const char *getClassName() const { return "MDNodeSDNode"; } // wak
   
   const MDNode *getMD() const { return MD; }
   
@@ -1369,6 +1399,7 @@ class RegisterSDNode : public SDNode {
     : SDNode(ISD::Register, DebugLoc(), getSDVTList(VT)), Reg(reg) {
   }
 public:
+  virtual const char *getClassName() const { return "RegisterSDNode"; } // wak
 
   unsigned getReg() const { return Reg; }
 
@@ -1388,6 +1419,8 @@ class BlockAddressSDNode : public SDNode {
              BA(ba), TargetFlags(Flags) {
   }
 public:
+  virtual const char *getClassName() const { return "BlockAddressSDNode"; } // wak
+
   const BlockAddress *getBlockAddress() const { return BA; }
   unsigned char getTargetFlags() const { return TargetFlags; }
 
@@ -1407,6 +1440,8 @@ class EHLabelSDNode : public SDNode {
     InitOperands(&Chain, ch);
   }
 public:
+  virtual const char *getClassName() const { return "EHLabelSDNode"; } // wak
+
   MCSymbol *getLabel() const { return Label; }
 
   static bool classof(const EHLabelSDNode *) { return true; }
@@ -1425,6 +1460,7 @@ class ExternalSymbolSDNode : public SDNode {
              DebugLoc(), getSDVTList(VT)), Symbol(Sym), TargetFlags(TF) {
   }
 public:
+  virtual const char *getClassName() const { return "ExternalSymbolSDNode"; } // wak
 
   const char *getSymbol() const { return Symbol; }
   unsigned char getTargetFlags() const { return TargetFlags; }
@@ -1444,6 +1480,7 @@ class CondCodeSDNode : public SDNode {
       Condition(Cond) {
   }
 public:
+  virtual const char *getClassName() const { return "CondCodeSDNode"; } // wak
 
   ISD::CondCode get() const { return Condition; }
 
@@ -1465,6 +1502,8 @@ class CvtRndSatSDNode : public SDNode {
     assert(NumOps == 5 && "wrong number of operations");
   }
 public:
+  virtual const char *getClassName() const { return "CvtRndSatSDNode"; } // wak
+
   ISD::CvtCode getCvtCode() const { return CvtCode; }
 
   static bool classof(const CvtRndSatSDNode *) { return true; }
@@ -1483,6 +1522,7 @@ class VTSDNode : public SDNode {
       ValueType(VT) {
   }
 public:
+  virtual const char *getClassName() const { return "VTSDNode"; } // wak
 
   EVT getVT() const { return ValueType; }
 
@@ -1503,6 +1543,8 @@ class LSBaseSDNode : public MemSDNode {
    */
   SDUse Ops[4];
 public:
+  virtual const char *getClassName() const { return "LSBaseSDNode"; } // wak
+
   LSBaseSDNode(ISD::NodeType NodeTy, DebugLoc dl, SDValue *Operands,
                unsigned numOperands, SDVTList VTs, ISD::MemIndexedMode AM,
                EVT MemVT, MachineMemOperand *MMO)
@@ -1552,6 +1594,7 @@ class LoadSDNode : public LSBaseSDNode {
     assert(!writeMem() && "Load MachineMemOperand is a store!");
   }
 public:
+  virtual const char *getClassName() const { return "LoadSDNode"; } // wak
 
   /// getExtensionType - Return whether this is a plain node,
   /// or one of the varieties of value-extending loads.
@@ -1583,6 +1626,7 @@ class StoreSDNode : public LSBaseSDNode {
     assert(writeMem() && "Store MachineMemOperand is not a store!");
   }
 public:
+  virtual const char *getClassName() const { return "StoreSDNode"; } // wak
 
   /// isTruncatingStore - Return true if the op does a truncation before store.
   /// For integers this is the same as doing a TRUNCATE and storing the result.
@@ -1621,6 +1665,8 @@ private:
   mmo_iterator MemRefsEnd;
 
 public:
+  virtual const char *getClassName() const { return "MachineSDNode"; } // wak
+
   mmo_iterator memoperands_begin() const { return MemRefs; }
   mmo_iterator memoperands_end() const { return MemRefsEnd; }
   bool memoperands_empty() const { return MemRefsEnd == MemRefs; }

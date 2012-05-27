@@ -26,6 +26,7 @@
 #include "llvm/InitializePasses.h"
 #include "llvm/Support/Atomic.h"
 #include <vector>
+#include <stdio.h>
 
 namespace llvm {
 
@@ -57,14 +58,20 @@ public:
            NormalCtor_t normal, bool isCFGOnly, bool is_analysis)
     : PassName(name), PassArgument(arg), PassID(pi), 
       IsCFGOnlyPass(isCFGOnly), 
-      IsAnalysis(is_analysis), IsAnalysisGroup(false), NormalCtor(normal) { }
+      IsAnalysis(is_analysis), IsAnalysisGroup(false), NormalCtor(normal) {
+    // wak: debug
+    // fprintf(stderr, "wak: PassInfo %s is AnalysisGroup\n", getPassName());
+  }
   /// PassInfo ctor - Do not call this directly, this should only be invoked
   /// through RegisterPass. This version is for use by analysis groups; it
   /// does not auto-register the pass.
   PassInfo(const char *name, const void *pi)
     : PassName(name), PassArgument(""), PassID(pi), 
       IsCFGOnlyPass(false), 
-      IsAnalysis(false), IsAnalysisGroup(true), NormalCtor(0) { }
+      IsAnalysis(false), IsAnalysisGroup(true), NormalCtor(0) {
+    // wak: debug
+    // fprintf(stderr, "wak: PassInfo %s is NOT AnalysisGroup\n", getPassName());
+  }
 
   /// getPassName - Return the friendly name for the pass, never returns null
   ///

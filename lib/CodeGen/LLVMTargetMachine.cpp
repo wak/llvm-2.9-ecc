@@ -33,7 +33,11 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/StandardPasses.h"
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
+#include <stdio.h>
 
 namespace llvm {
   bool EnableFastISel;
@@ -120,6 +124,8 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
                                             CodeGenFileType FileType,
                                             CodeGenOpt::Level OptLevel,
                                             bool DisableVerify) {
+  if (OptWakDebugAroundTargetMachine)
+    fprintf(stderr, "wak: addPassesToEmitFile LLVMTargetMachine.cpp\n");
   // Add common CodeGen passes.
   MCContext *Context = 0;
   if (addCommonCodeGenPasses(PM, OptLevel, DisableVerify, Context))
@@ -132,6 +138,8 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
   switch (FileType) {
   default: return true;
   case CGFT_AssemblyFile: {
+    if (OptWakDebugAroundTargetMachine)
+	  fprintf(stderr, "wak: AssemblyFile \n");
     MCInstPrinter *InstPrinter =
       getTarget().createMCInstPrinter(MAI.getAssemblerDialect(), MAI);
 
@@ -256,6 +264,10 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
                                                CodeGenOpt::Level OptLevel,
                                                bool DisableVerify,
                                                MCContext *&OutContext) {
+
+  if (OptWakDebugAroundTargetMachine)
+    fprintf(stderr, "wak: addCommonCodeGenPasses()\n");
+
   // Standard LLVM-Level Passes.
 
   // Basic AliasAnalysis support.
@@ -263,8 +275,9 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
 
   // Before running any passes, run the verifier to determine if the input
   // coming from the front-end and/or optimizer is valid.
-  if (!DisableVerify)
+  if (!DisableVerify) {
     PM.add(createVerifierPass());
+  }
 
   // Run loop strength reduction before anything else.
   if (OptLevel != CodeGenOpt::None && !DisableLSR) {
@@ -308,6 +321,10 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
 
   PM.add(createStackProtectorPass(getTargetLowering()));
 
+  // wak
+  if (OptWakAddMachineFunctionPass)
+    PM.add(createWakEccCheckPass(getTargetLowering()));
+
   addPreISel(PM, OptLevel);
 
   if (PrintISelInput)
@@ -333,10 +350,15 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
   PM.add(new MachineFunctionAnalysis(*this, OptLevel));
 
   // Enable FastISel with -fast, but allow that to be overridden.
-  if (EnableFastISelOption == cl::BOU_TRUE ||
-      (OptLevel == CodeGenOpt::None && EnableFastISelOption != cl::BOU_FALSE))
-    EnableFastISel = true;
+  // wak: FastISelはややこしいので無効にする
+  //      （オプションのデフォルト値をfalseにする方法が分からないので，ここでやっておく）
+  EnableFastISel = false;
 
+  // if (EnableFastISelOption == cl::BOU_TRUE ||
+  //     (OptLevel == CodeGenOpt::None && EnableFastISelOption != cl::BOU_FALSE))
+  //   EnableFastISel = true;
+
+  // wak: 命令選択するパスを登録
   // Ask the target for an isel.
   if (addInstSelector(PM, OptLevel))
     return true;
@@ -346,6 +368,12 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
 
   // Expand pseudo-instructions emitted by ISel.
   PM.add(createExpandISelPseudosPass());
+
+
+  // wak: my test pass
+  if (OptWakAddFunctionPass)
+    addWakTest(PM, OptLevel);
+
 
   // Optimize PHIs before DCE: removing dead PHI cycles may make more
   // instructions dead.

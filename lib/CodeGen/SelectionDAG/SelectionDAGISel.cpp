@@ -52,6 +52,9 @@
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/Statistic.h"
 #include <algorithm>
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 STATISTIC(NumFastIselFailures, "Number of instructions fast isel failed on");
@@ -75,6 +78,7 @@ EnableFastISelAbort("fast-isel-abort", cl::Hidden,
           cl::desc("Enable abort calls when \"fast\" instruction fails"));
 
 #ifndef NDEBUG
+
 static cl::opt<bool>
 ViewDAGCombine1("view-dag-combine1-dags", cl::Hidden,
           cl::desc("Pop up a window to show dags before the first "
@@ -280,6 +284,14 @@ static void SplitCriticalSideEffectEdges(Function &Fn, Pass *SDISel) {
   }
 }
 
+static void dumpMF(const MachineFunction *MF, const char *id) {
+  if (OptWakDebugISel) {
+    dbgs() << "- wak: dumpMF,  " << id << "--------------- \n";
+    MF->dump();
+    dbgs() << "------ HERE ----------------------- \n";
+  }
+}
+
 bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
   // Do some sanity-checking on the command-line options.
   assert((!EnableFastISelVerbose || EnableFastISel) &&
@@ -296,15 +308,21 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
   AA = &getAnalysis<AliasAnalysis>();
   GFI = Fn.hasGC() ? &getAnalysis<GCModuleInfo>().getFunctionInfo(Fn) : 0;
 
+  dumpMF(MF, "begin");
+
   DEBUG(dbgs() << "\n\n\n=== " << Fn.getName() << "\n");
 
   SplitCriticalSideEffectEdges(const_cast<Function&>(Fn), this);
 
   CurDAG->init(*MF);
-  FuncInfo->set(Fn, *MF);
+  FuncInfo->set(Fn, *MF);       // wak: ここで，dumpのFrame Objects:がつくられている
   SDB->init(GFI, *AA);
 
-  SelectAllBasicBlocks(Fn);
+  dumpMF(MF, "Before SelectAllBasicBlocks()");
+  // wak: この時点では，命令の選択は行われていない．（dumpMFの出力的に）
+  SelectAllBasicBlocks(Fn);     // ここで大まかにやって，細かい所を下でやる？
+  // wak: この時点で，命令の選択は終了している．（仮想レジスタはそのまま）
+  dumpMF(MF, "After SelectAllBasicBlocks()");
 
   // If the first basic block in the function has live ins that need to be
   // copied into vregs, emit the copies into the top of the block before
@@ -319,6 +337,8 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
       if (LI->second)
         LiveInMap.insert(std::make_pair(LI->first, LI->second));
 
+  dumpMF(MF, "Insert DBG_VALUE instructions for function arguments to the entry block");
+
   // Insert DBG_VALUE instructions for function arguments to the entry block.
   for (unsigned i = 0, e = FuncInfo->ArgDbgValues.size(); i != e; ++i) {
     MachineInstr *MI = FuncInfo->ArgDbgValues[e-i-1];
@@ -331,6 +351,9 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
       // FIXME: VR def may not be in entry block.
       Def->getParent()->insert(llvm::next(InsertPos), MI);
     }
+
+
+    dumpMF(MF, "If Reg is live-in then update debug info to track its copy in a vreg");
 
     // If Reg is live-in then update debug info to track its copy in a vreg.
     DenseMap<unsigned, unsigned>::iterator LDI = LiveInMap.find(Reg);
@@ -371,7 +394,10 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
     }
   }
 
+  dumpMF(MF, "determine if there are any calls in this machine function");
+
   // Determine if there are any calls in this machine function.
+  // wak: 関数呼び出しがあるかどうかを調べる？
   MachineFrameInfo *MFI = MF->getFrameInfo();
   if (!MFI->hasCalls()) {
     for (MachineFunction::const_iterator
@@ -381,6 +407,8 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
              II = MBB->begin(), IE = MBB->end(); II != IE; ++II) {
         const TargetInstrDesc &TID = TM.getInstrInfo()->get(II->getOpcode());
 
+        // wak: CALL32mやCALL64mは，isCall=trueでisReturn=false
+        // wak: isStackAligningInlineAsm()はよくわからない
         if ((TID.isCall() && !TID.isReturn()) ||
             II->isStackAligningInlineAsm()) {
           MFI->setHasCalls(true);
@@ -391,7 +419,10 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
   done:;
   }
 
+  dumpMF(MF, "determine if there is a call to setjmp in the machine function");
+
   // Determine if there is a call to setjmp in the machine function.
+  // wak: setjmp, vforkなど，戻り値が2個ある関数を呼ぶか？
   MF->setCallsSetJmp(FunctionCallsSetJmp(&Fn));
 
   // Replace forward-declared registers with the registers containing
@@ -418,6 +449,7 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
   // at this point.
   FuncInfo->clear();
 
+  dumpMF(MF, "end of runON..");
   return true;
 }
 
@@ -428,11 +460,13 @@ SelectionDAGISel::SelectBasicBlock(BasicBlock::const_iterator Begin,
   // Lower all of the non-terminator instructions. If a call is emitted
   // as a tail call, cease emitting nodes for this block. Terminators
   // are handled below.
-  for (BasicBlock::const_iterator I = Begin; I != End && !SDB->HasTailCall; ++I)
-    SDB->visit(*I);
+  for (BasicBlock::const_iterator I = Begin; I != End && !SDB->HasTailCall; ++I) {
+    SDB->visit(*I);             // wak: SelectionDAGBuilder#visit
+  }
 
   // Make sure the root of the DAG is up-to-date.
   CurDAG->setRoot(SDB->getControlRoot());
+  //dumpMF(MF, "For each SelectBasicBlock()");
   HadTailCall = SDB->HasTailCall;
   SDB->clear();
 
@@ -497,6 +531,7 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
 
   DEBUG(dbgs() << "Initial selection DAG:\n"; CurDAG->dump());
 
+  // wak: 最初のDAG構築後
   if (ViewDAGCombine1) CurDAG->viewGraph("dag-combine1 input for " + BlockName);
 
   // Run the DAG combiner in pre-legalize mode.
@@ -509,12 +544,15 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
 
   // Second step, hack on the DAG until it only uses operations and types that
   // the target supports.
+  // wak: ターゲットでサポートしていない型をlegalizeする前
   if (ViewLegalizeTypesDAGs) CurDAG->viewGraph("legalize-types input for " +
                                                BlockName);
 
   bool Changed;
   {
     NamedRegionTimer T("Type Legalization", GroupName, TimePassesIsEnabled);
+    // wak: 型のlegalize
+    // DAGTypeLegalizer::run()が呼ばれる．
     Changed = CurDAG->LegalizeTypes();
   }
 
@@ -522,6 +560,7 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
 
   if (Changed) {
     if (ViewDAGCombineLT)
+      // wak: ?
       CurDAG->viewGraph("dag-combine-lt input for " + BlockName);
 
     // Run the DAG combiner in post-type-legalize mode.
@@ -569,6 +608,7 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
 
   DEBUG(dbgs() << "Legalized selection DAG:\n"; CurDAG->dump());
 
+  // wak: 型に関する最適化前（命令のlegalize後）
   if (ViewDAGCombine2) CurDAG->viewGraph("dag-combine2 input for " + BlockName);
 
   // Run the DAG combiner in post-legalize mode.
@@ -582,17 +622,20 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
   if (OptLevel != CodeGenOpt::None)
     ComputeLiveOutVRegInfo();
 
+  // wak: 命令選択前（型関連最適化後）
   if (ViewISelDAGs) CurDAG->viewGraph("isel input for " + BlockName);
 
   // Third, instruction select all of the operations to machine code, adding the
   // code to the MachineBasicBlock.
   {
     NamedRegionTimer T("Instruction Selection", GroupName, TimePassesIsEnabled);
+    // wak: 命令選択
     DoInstructionSelection();
   }
 
   DEBUG(dbgs() << "Selected selection DAG:\n"; CurDAG->dump());
 
+  // wak: スケジューリング前の表示（命令選択後）
   if (ViewSchedDAGs) CurDAG->viewGraph("scheduler input for " + BlockName);
 
   // Schedule machine code.
@@ -600,17 +643,21 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
   {
     NamedRegionTimer T("Instruction Scheduling", GroupName,
                        TimePassesIsEnabled);
+    // wak: 先では，ScheduleDAG::Run(FuncInfo->MBB, FuncInfo->InsertPt)
     Scheduler->Run(CurDAG, FuncInfo->MBB, FuncInfo->InsertPt);
   }
 
+  // wak: ここまででSelectionDAG関連の処理は終了
   if (ViewSUnitDAGs) Scheduler->viewGraph();
 
   // Emit machine code to BB.  This can change 'BB' to the last block being
   // inserted into.
+  // wak: マシンコードをBBに出力する．
   MachineBasicBlock *FirstMBB = FuncInfo->MBB, *LastMBB;
   {
     NamedRegionTimer T("Instruction Creation", GroupName, TimePassesIsEnabled);
 
+    // wak: EmitScheduleの先で，InstrEmitterを用いてMachineInstrを作ってるっぽい？
     LastMBB = FuncInfo->MBB = Scheduler->EmitSchedule();
     FuncInfo->InsertPt = Scheduler->InsertPos;
   }
@@ -631,6 +678,7 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
   CurDAG->clear();
 }
 
+// wak: ここまでにDAGを作ってDAGを最適化などして，ここから，命令選択を行う
 void SelectionDAGISel::DoInstructionSelection() {
   DEBUG(errs() << "===== Instruction selection begins:\n");
 
@@ -819,9 +867,13 @@ static void CheckLineNumbers(const MachineBasicBlock *MBB) {
 
 void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
   // Initialize the Fast-ISel state, if needed.
-  FastISel *FastIS = 0;
-  if (EnableFastISel)
-    FastIS = TLI.createFastISel(*FuncInfo);
+
+  // wak: [removed] FastIS
+  if (OptWakDebugISel) {
+    errs() << "wak: dump CurDAG (beginning of SelectAllBasicBlocks)\n";
+    CurDAG->dump();
+    errs() << "wak: dump CurDAG end\n";
+  }
 
   // Iterate over all basic blocks in the function.
   ReversePostOrderTraversal<const Function*> RPOT(&Fn);
@@ -832,30 +884,34 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
     CheckLineNumbers(LLVMBB);
 #endif
 
-    if (OptLevel != CodeGenOpt::None) {
-      bool AllPredsVisited = true;
-      for (const_pred_iterator PI = pred_begin(LLVMBB), PE = pred_end(LLVMBB);
-           PI != PE; ++PI) {
-        if (!FuncInfo->VisitedBBs.count(*PI)) {
-          AllPredsVisited = false;
-          break;
-        }
-      }
+    // wak: 最適化時 only
+    {{{
+          if (OptLevel != CodeGenOpt::None) {
+            bool AllPredsVisited = true;
+            for (const_pred_iterator PI = pred_begin(LLVMBB), PE = pred_end(LLVMBB);
+                 PI != PE; ++PI) {
+              if (!FuncInfo->VisitedBBs.count(*PI)) {
+                AllPredsVisited = false;
+                break;
+              }
+            }
 
-      if (AllPredsVisited) {
-        for (BasicBlock::const_iterator I = LLVMBB->begin(), E = LLVMBB->end();
-             I != E && isa<PHINode>(I); ++I) {
-          FuncInfo->ComputePHILiveOutRegInfo(cast<PHINode>(I));
-        }
-      } else {
-        for (BasicBlock::const_iterator I = LLVMBB->begin(), E = LLVMBB->end();
-             I != E && isa<PHINode>(I); ++I) {
-          FuncInfo->InvalidatePHILiveOutRegInfo(cast<PHINode>(I));
-        }
-      }
+            if (AllPredsVisited) {
+              for (BasicBlock::const_iterator I = LLVMBB->begin(), E = LLVMBB->end();
+                   I != E && isa<PHINode>(I); ++I) {
+                FuncInfo->ComputePHILiveOutRegInfo(cast<PHINode>(I));
+              }
+            } else {
+              for (BasicBlock::const_iterator I = LLVMBB->begin(), E = LLVMBB->end();
+                   I != E && isa<PHINode>(I); ++I) {
+                FuncInfo->InvalidatePHILiveOutRegInfo(cast<PHINode>(I));
+              }
+            }
 
-      FuncInfo->VisitedBBs.insert(LLVMBB);
-    }
+            FuncInfo->VisitedBBs.insert(LLVMBB);
+          }
+        }}}
+    // wak: 最適化時 only ここまで
 
     FuncInfo->MBB = FuncInfo->MBBMap[LLVMBB];
     FuncInfo->InsertPt = FuncInfo->MBB->getFirstNonPHI();
@@ -867,129 +923,50 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
     FuncInfo->InsertPt = FuncInfo->MBB->getFirstNonPHI();
 
     // Setup an EH landing-pad block.
-    if (FuncInfo->MBB->isLandingPad())
+    if (FuncInfo->MBB->isLandingPad()) {
+      // wak: C++などの例外処理に必要？
+      errs() << "wak: landing pad found\n";
       PrepareEHLandingPad();
+    }
 
     // Lower any arguments needed in this block if this is the entry block.
     if (LLVMBB == &Fn.getEntryBlock())
       LowerArguments(LLVMBB);
 
-    // Before doing SelectionDAG ISel, see if FastISel has been requested.
-    if (FastIS) {
-      FastIS->startNewBlock();
-
-      // Emit code for any incoming arguments. This must happen before
-      // beginning FastISel on the entry block.
-      if (LLVMBB == &Fn.getEntryBlock()) {
-        CurDAG->setRoot(SDB->getControlRoot());
-        SDB->clear();
-        CodeGenAndEmitDAG();
-
-        // If we inserted any instructions at the beginning, make a note of
-        // where they are, so we can be sure to emit subsequent instructions
-        // after them.
-        if (FuncInfo->InsertPt != FuncInfo->MBB->begin())
-          FastIS->setLastLocalValue(llvm::prior(FuncInfo->InsertPt));
-        else
-          FastIS->setLastLocalValue(0);
-      }
-
-      // Do FastISel on as many instructions as possible.
-      for (; BI != Begin; --BI) {
-        const Instruction *Inst = llvm::prior(BI);
-
-        // If we no longer require this instruction, skip it.
-        if (!Inst->mayWriteToMemory() &&
-            !isa<TerminatorInst>(Inst) &&
-            !isa<DbgInfoIntrinsic>(Inst) &&
-            !FuncInfo->isExportedInst(Inst))
-          continue;
-
-        // Bottom-up: reset the insert pos at the top, after any local-value
-        // instructions.
-        FastIS->recomputeInsertPt();
-
-        // Try to select the instruction with FastISel.
-        if (FastIS->SelectInstruction(Inst)) {
-          // If fast isel succeeded, check to see if there is a single-use
-          // non-volatile load right before the selected instruction, and see if
-          // the load is used by the instruction.  If so, try to fold it.
-          const Instruction *BeforeInst = 0;
-          if (Inst != Begin)
-            BeforeInst = llvm::prior(llvm::prior(BI));
-          if (BeforeInst && isa<LoadInst>(BeforeInst) &&
-              BeforeInst->hasOneUse() && *BeforeInst->use_begin() == Inst &&
-              TryToFoldFastISelLoad(cast<LoadInst>(BeforeInst), FastIS))
-            --BI; // If we succeeded, don't re-select the load.
-          continue;
-        }
-
-        // Then handle certain instructions as single-LLVM-Instruction blocks.
-        if (isa<CallInst>(Inst)) {
-          ++NumFastIselFailures;
-          if (EnableFastISelVerbose || EnableFastISelAbort) {
-            dbgs() << "FastISel missed call: ";
-            Inst->dump();
-          }
-
-          if (!Inst->getType()->isVoidTy() && !Inst->use_empty()) {
-            unsigned &R = FuncInfo->ValueMap[Inst];
-            if (!R)
-              R = FuncInfo->CreateRegs(Inst->getType());
-          }
-
-          bool HadTailCall = false;
-          SelectBasicBlock(Inst, BI, HadTailCall);
-
-          // If the call was emitted as a tail call, we're done with the block.
-          if (HadTailCall) {
-            --BI;
-            break;
-          }
-
-          continue;
-        }
-
-        // Otherwise, give up on FastISel for the rest of the block.
-        // For now, be a little lenient about non-branch terminators.
-        if (!isa<TerminatorInst>(Inst) || isa<BranchInst>(Inst)) {
-          ++NumFastIselFailures;
-          if (EnableFastISelVerbose || EnableFastISelAbort) {
-            dbgs() << "FastISel miss: ";
-            Inst->dump();
-          }
-          if (EnableFastISelAbort)
-            // The "fast" selector couldn't handle something and bailed.
-            // For the purpose of debugging, just abort.
-            llvm_unreachable("FastISel didn't select the entire block");
-        }
-        break;
-      }
-
-      FastIS->recomputeInsertPt();
-    }
+    // wak: [removed] FastISで命令選択
 
     if (Begin != BI)
-      ++NumDAGBlocks;
+      ++NumDAGBlocks;           // wak: まだ残りがある
     else
-      ++NumFastIselBlocks;
+      ++NumFastIselBlocks;      // wak: すべてFastIselでできた？
 
     // Run SelectionDAG instruction selection on the remainder of the block
     // not handled by FastISel. If FastISel is not run, this is the entire
     // block.
     bool HadTailCall;
+    // wak: SelectBasicBlock(LLVMBB->getFirstNonPHI(), LLVMBB->end(), HadTailCall) と等価
     SelectBasicBlock(Begin, BI, HadTailCall);
+    dumpMF(MF, "SelectAllBasicBlocks after SelectBasicBlock");
 
     FinishBasicBlock();
+    dumpMF(MF, "SelectAllBasicBlocks after FinishBasicBlock");
+
     FuncInfo->PHINodesToUpdate.clear();
   }
+  // wak: ここまでで意味のある処理は終わり．
 
-  delete FastIS;
+  // wak: [removed] FastIS clean up
+
 #ifndef NDEBUG
   for (MachineFunction::const_iterator MBI = MF->begin(), MBE = MF->end();
        MBI != MBE; ++MBI)
     CheckLineNumbers(MBI);
 #endif
+  if (OptWakDebugISel) {
+    errs() << "wak: dump CurDAG (end of SelectAllBasicBlocks)\n";
+    CurDAG->dump();
+    errs() << "wak: dump CurDAG end\n";
+  }
 }
 
 void

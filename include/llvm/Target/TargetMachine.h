@@ -383,6 +383,12 @@ public:
   /// getEnableTailMergeDefault - the default setting for -enable-tail-merge
   /// on this target.  User flag overrides.
   virtual bool getEnableTailMergeDefault() const { return true; }
+
+  // wak
+  // WakTest - wak test pass
+  virtual bool addWakTest(PassManagerBase &PM, CodeGenOpt::Level OptLevel) {
+    return true;
+  }
 };
 
 } // End llvm namespace

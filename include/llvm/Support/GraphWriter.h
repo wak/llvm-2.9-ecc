@@ -160,11 +160,13 @@ public:
     writeNode(*Node);
   }
 
+  // wak: .dotの出力は，ここが呼ばれている．
   void writeNode(NodeType *Node) {
     std::string NodeAttributes = DTraits.getNodeAttributes(Node, G);
 
     O << "\tNode" << static_cast<const void*>(Node) << " [shape=record,";
     if (!NodeAttributes.empty()) O << NodeAttributes << ",";
+    // wak: label={...}ここから
     O << "label=\"{";
 
     if (!DTraits.renderGraphFromBottomUp()) {
@@ -188,6 +190,8 @@ public:
     }
 
     if (DTraits.renderGraphFromBottomUp()) {
+      // wak: これで，「EntryToken [ORD=5] [ID=0]」が出力されているはず
+      // wak: この文字列は，SDNode#print_details()が作っている
       O << DOT::EscapeString(DTraits.getNodeLabel(Node, G));
 
       // If we should include the address of the node in the label, do so now.
@@ -209,7 +213,7 @@ public:
         O << "|<d64>truncated...";
       O << "}";
     }
-
+    // wak: label={...}ここまで
     O << "}\"];\n";   // Finish printing the "node" line
 
     // Output all of the edges now
@@ -268,6 +272,7 @@ public:
   }
 
   /// emitEdge - Output an edge from a simple node into the graph...
+  // wak: 線を引くのはこれ
   void emitEdge(const void *SrcNodeID, int SrcNodePort,
                 const void *DestNodeID, int DestNodePort,
                 const std::string &Attrs) {

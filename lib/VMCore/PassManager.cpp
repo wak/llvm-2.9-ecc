@@ -28,6 +28,9 @@
 #include <algorithm>
 #include <cstdio>
 #include <map>
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 // See PassManagers.h for Pass Manager infrastructure overview.
@@ -614,6 +617,9 @@ void PMTopLevelManager::schedulePass(Pass *P) {
       Pass *AnalysisPass = findAnalysisPass(*I);
       if (!AnalysisPass) {
         const PassInfo *PI = PassRegistry::getPassRegistry()->getPassInfo(*I);
+	if (PI == NULL) {		     // wak
+		assert(PI != NULL && "getPassInfo returns NULL!!");
+	}
         AnalysisPass = PI->createPass();
         if (P->getPotentialPassManagerType () ==
             AnalysisPass->getPotentialPassManagerType())
@@ -682,22 +688,29 @@ Pass *PMTopLevelManager::findAnalysisPass(AnalysisID AID) {
 
 // Print passes managed by this top level manager.
 void PMTopLevelManager::dumpPasses() const {
-
-  if (PassDebugging < Structure)
+  if (!OptWakDebugPass)
     return;
+  fprintf(stderr, "wak: [Pass] follow dumps by dumpPasses()\n");
+  fprintf(stderr, "wak: [Pass]   Immutable passes\n");
+  // wak: removed
+  // if (PassDebugging < Structure)
+  //   return;
 
   // Print out the immutable passes
   for (unsigned i = 0, e = ImmutablePasses.size(); i != e; ++i) {
     ImmutablePasses[i]->dumpPassStructure(0);
   }
 
+  fprintf(stderr, "wak: [Pass] Other passes\n");
   // Every class that derives from PMDataManager also derives from Pass
   // (sometimes indirectly), but there's no inheritance relationship
   // between PMDataManager and Pass, so we have to getAsPass to get
   // from a PMDataManager* to a Pass*.
   for (SmallVector<PMDataManager *, 8>::const_iterator I = PassManagers.begin(),
-         E = PassManagers.end(); I != E; ++I)
+	       E = PassManagers.end(); I != E; ++I) {
     (*I)->getAsPass()->dumpPassStructure(1);
+  }
+  fprintf(stderr, "wak: [Pass] END\n");
 }
 
 void PMTopLevelManager::dumpArguments() const {
@@ -1340,15 +1353,15 @@ void FunctionPassManager::add(Pass *P) {
   const void *PassID = P->getPassID();
   if (P->getPassKind() == PT_Function)
     if (ShouldPrintBeforePass(PassID))
-      addImpl(P->createPrinterPass(dbgs(), std::string("*** IR Dump Before ")
-                                   + P->getPassName() + " ***"));
+      addImpl(P->createPrinterPass(dbgs(), std::string("\n*** IR Dump Before ")
+                                   + P->getPassName() + " *** FPM\n"));
 
   addImpl(P);
 
   if (P->getPassKind() == PT_Function)
     if (ShouldPrintAfterPass(PassID))
-      addImpl(P->createPrinterPass(dbgs(), std::string("*** IR Dump After ")
-                                   + P->getPassName() + " ***"));
+      addImpl(P->createPrinterPass(dbgs(), std::string("\n*** IR Dump After ")
+                                   + P->getPassName() + " *** FPM\n"));
 }
 
 /// run - Execute all of the passes scheduled for execution.  Keep
@@ -1664,16 +1677,17 @@ void PassManager::addImpl(Pass *P) {
 /// will be destroyed as well, so there is no need to delete the pass.  This
 /// implies that all passes MUST be allocated with 'new'.
 void PassManager::add(Pass *P) {
+	// fprintf(stderr, " PassManager::add(%s)\n", P.);
   const void* PassID = P->getPassID();
   if (ShouldPrintBeforePass(PassID))
-    addImpl(P->createPrinterPass(dbgs(), std::string("*** IR Dump Before ")
-                                 + P->getPassName() + " ***"));
+    addImpl(P->createPrinterPass(dbgs(), std::string("\n*** IR Dump Before ")
+                                 + P->getPassName() + " *** PM\n"));
 
   addImpl(P);
 
   if (ShouldPrintAfterPass(PassID))
-    addImpl(P->createPrinterPass(dbgs(), std::string("*** IR Dump After ")
-                                 + P->getPassName() + " ***"));
+    addImpl(P->createPrinterPass(dbgs(), std::string("\n*** IR Dump After ")
+                                 + P->getPassName() + " *** PM\n"));
 }
 
 /// run - Execute all of the passes scheduled for execution.  Keep track of

@@ -646,9 +646,15 @@ std::string ScheduleDAGInstrs::getGraphNodeLabel(const SUnit *SU) const {
 }
 
 // EmitSchedule - Emit the machine code in scheduled order.
+// -- trans --
+// EmitSchedul - マシンコードをスケジュールされた順番に出力する
+// これ呼ばれない？こっちじゃない
 MachineBasicBlock *ScheduleDAGInstrs::EmitSchedule() {
   // For MachineInstr-based scheduling, we're rescheduling the instructions in
   // the block, so start by removing them from the block.
+  // -- trans --
+  // MachineInstrベースのスケジューリングのために，ブロック内の命令を際スケジューリングする．
+  // そのため，まずブロックから彼らを削除することからはじめる．
   while (Begin != InsertPos) {
     MachineBasicBlock::iterator I = Begin;
     ++Begin;

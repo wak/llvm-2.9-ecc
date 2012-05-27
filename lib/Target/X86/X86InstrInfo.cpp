@@ -35,6 +35,9 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include <limits>
+#include <cstdio>
+
+#include "llvm/WakOptions.h"
 
 using namespace llvm;
 
@@ -58,6 +61,9 @@ X86InstrInfo::X86InstrInfo(X86TargetMachine &tm)
     TB_NOT_REVERSABLE = 1U << 31,
     TB_FLAGS = TB_NOT_REVERSABLE
   };
+
+  if (OptWakDebugSay)
+    fprintf(stderr, "I am X86InstrInfo\n");
 
   static const unsigned OpTbl2Addr[][2] = {
     { X86::ADC32ri,     X86::ADC32mi },
@@ -2011,11 +2017,13 @@ void X86InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   llvm_unreachable("Cannot emit physreg copy instruction");
 }
 
+#include <cstdio>
 static unsigned getLoadStoreRegOpcode(unsigned Reg,
                                       const TargetRegisterClass *RC,
                                       bool isStackAligned,
                                       const TargetMachine &TM,
                                       bool load) {
+	fprintf(stderr, "getLoadStoreRegOpcode\n");
   switch (RC->getID()) {
   default:
     llvm_unreachable("Unknown regclass");

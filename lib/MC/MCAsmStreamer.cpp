@@ -28,6 +28,9 @@
 #include "llvm/Target/TargetAsmInfo.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include <cctype>
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 namespace {
@@ -924,7 +927,11 @@ void MCAsmStreamer::EmitRegSave(const SmallVectorImpl<unsigned> &RegList,
   EmitEOL();
 }
 
+#include <cstdio>
 void MCAsmStreamer::EmitInstruction(const MCInst &Inst) {
+  if (OptWakDebugSay)
+	fprintf(stderr, "wak: I am EmitInstruction\n");
+	//Inst.print(OS, &MAI);
   assert(getCurrentSection() && "Cannot emit contents before setting section!");
 
   if (!UseLoc)
@@ -964,11 +971,14 @@ void MCAsmStreamer::Finish() {
     MCDwarfFileTable::Emit(this);
 }
 
+#include <cstdio>
 MCStreamer *llvm::createAsmStreamer(MCContext &Context,
                                     formatted_raw_ostream &OS,
                                     bool isVerboseAsm, bool useLoc,
                                     MCInstPrinter *IP, MCCodeEmitter *CE,
                                     TargetAsmBackend *TAB, bool ShowInst) {
+  if (OptWakDebugSay)
+    fprintf(stderr, "wak: I am createAsmStreamer\n");
   return new MCAsmStreamer(Context, OS, isVerboseAsm, useLoc,
                            IP, CE, TAB, ShowInst);
 }

@@ -790,7 +790,7 @@ def MOV16rr : I<0x89, MRMDestReg, (outs GR16:$dst), (ins GR16:$src),
 def MOV32rr : I<0x89, MRMDestReg, (outs GR32:$dst), (ins GR32:$src),
                 "mov{l}\t{$src, $dst|$dst, $src}", []>;
 def MOV64rr : RI<0x89, MRMDestReg, (outs GR64:$dst), (ins GR64:$src),
-                 "mov{q}\t{$src, $dst|$dst, $src}", []>;
+                 "mov{G}\t{$src, $dst|$dst, $src}", []>;
 }
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def MOV8ri  : Ii8 <0xB0, AddRegFrm, (outs GR8 :$dst), (ins i8imm :$src),
@@ -803,10 +803,10 @@ def MOV32ri : Ii32<0xB8, AddRegFrm, (outs GR32:$dst), (ins i32imm:$src),
                    "mov{l}\t{$src, $dst|$dst, $src}",
                    [(set GR32:$dst, imm:$src)]>;
 def MOV64ri : RIi64<0xB8, AddRegFrm, (outs GR64:$dst), (ins i64imm:$src),
-                    "movabs{q}\t{$src, $dst|$dst, $src}",
+                    "movabs{G}\t{$src, $dst|$dst, $src}",
                     [(set GR64:$dst, imm:$src)]>;
 def MOV64ri32 : RIi32<0xC7, MRM0r, (outs GR64:$dst), (ins i64i32imm:$src),
-                      "mov{q}\t{$src, $dst|$dst, $src}",
+                      "mov{G}\t{$src, $dst|$dst, $src}",
                       [(set GR64:$dst, i64immSExt32:$src)]>;
 }
 
@@ -820,7 +820,7 @@ def MOV32mi : Ii32<0xC7, MRM0m, (outs), (ins i32mem:$dst, i32imm:$src),
                    "mov{l}\t{$src, $dst|$dst, $src}",
                    [(store (i32 imm:$src), addr:$dst)]>;
 def MOV64mi32 : RIi32<0xC7, MRM0m, (outs), (ins i64mem:$dst, i64i32imm:$src),
-                      "mov{q}\t{$src, $dst|$dst, $src}",
+                      "mov{G}\t{$src, $dst|$dst, $src}",
                       [(store i64immSExt32:$src, addr:$dst)]>;
 
 /// moffs8, moffs16 and moffs32 versions of moves.  The immediate is a
@@ -850,13 +850,13 @@ def MOV32ao32 : Ii32 <0xA3, RawFrm, (outs offset32:$dst), (ins),
 // in question.
 /*
 def MOV64o8a : RIi8<0xA0, RawFrm, (outs), (ins offset8:$src),
-                      "mov{q}\t{$src, %rax|%rax, $src}", []>;
+                      "mov{G}\t{$src, %rax|%rax, $src}", []>;
 def MOV64o64a : RIi32<0xA1, RawFrm, (outs), (ins offset64:$src),
-                       "mov{q}\t{$src, %rax|%rax, $src}", []>;
+                       "mov{G}\t{$src, %rax|%rax, $src}", []>;
 def MOV64ao8 : RIi8<0xA2, RawFrm, (outs offset8:$dst), (ins),
-                       "mov{q}\t{%rax, $dst|$dst, %rax}", []>;
+                       "mov{G}\t{%rax, $dst|$dst, %rax}", []>;
 def MOV64ao64 : RIi32<0xA3, RawFrm, (outs offset64:$dst), (ins),
-                       "mov{q}\t{%rax, $dst|$dst, %rax}", []>;
+                       "mov{G}\t{%rax, $dst|$dst, %rax}", []>;
 */
 
 
@@ -868,7 +868,7 @@ def MOV16rr_REV : I<0x8B, MRMSrcReg, (outs GR16:$dst), (ins GR16:$src),
 def MOV32rr_REV : I<0x8B, MRMSrcReg, (outs GR32:$dst), (ins GR32:$src),
                     "mov{l}\t{$src, $dst|$dst, $src}", []>;
 def MOV64rr_REV : RI<0x8B, MRMSrcReg, (outs GR64:$dst), (ins GR64:$src),
-                     "mov{q}\t{$src, $dst|$dst, $src}", []>;
+                     "mov{G}\t{$src, $dst|$dst, $src}", []>;
 }
 
 let canFoldAsLoad = 1, isReMaterializable = 1 in {
@@ -882,7 +882,7 @@ def MOV32rm : I<0x8B, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
                 "mov{l}\t{$src, $dst|$dst, $src}",
                 [(set GR32:$dst, (loadi32 addr:$src))]>;
 def MOV64rm : RI<0x8B, MRMSrcMem, (outs GR64:$dst), (ins i64mem:$src),
-                 "mov{q}\t{$src, $dst|$dst, $src}",
+                 "mov{G}\t{$src, $dst|$dst, $src}",
                  [(set GR64:$dst, (load addr:$src))]>;
 }
 
@@ -896,7 +896,7 @@ def MOV32mr : I<0x89, MRMDestMem, (outs), (ins i32mem:$dst, GR32:$src),
                 "mov{l}\t{$src, $dst|$dst, $src}",
                 [(store GR32:$src, addr:$dst)]>;
 def MOV64mr : RI<0x89, MRMDestMem, (outs), (ins i64mem:$dst, GR64:$src),
-                 "mov{q}\t{$src, $dst|$dst, $src}",
+                 "mov{G}\t{$src, $dst|$dst, $src}",
                  [(store GR64:$src, addr:$dst)]>;
 
 // Versions of MOV8rr, MOV8mr, and MOV8rm that use i8mem_NOREX and GR8_NOREX so
@@ -1282,7 +1282,7 @@ include "X86InstrCompiler.td"
 //===----------------------------------------------------------------------===//
 
 def : MnemonicAlias<"call", "calll">, Requires<[In32BitMode]>;
-def : MnemonicAlias<"call", "callq">, Requires<[In64BitMode]>;
+def : MnemonicAlias<"call", "hahaha">, Requires<[In64BitMode]>;
 
 def : MnemonicAlias<"cbw",  "cbtw">;
 def : MnemonicAlias<"cwd",  "cwtd">;

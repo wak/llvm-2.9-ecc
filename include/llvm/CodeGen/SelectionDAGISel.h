@@ -213,6 +213,7 @@ protected:
 
   /// ReplaceUses - replace all uses of the old node F with the use
   /// of the new node T.
+  // wak: UseListを入れ替える？
   void ReplaceUses(SDNode *F, SDNode *T) {
     ISelUpdater ISU(ISelPosition);
     CurDAG->ReplaceAllUsesWith(F, T, &ISU);

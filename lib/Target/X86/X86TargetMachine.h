@@ -26,6 +26,8 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetFrameLowering.h"
 
+#include <stdio.h>
+
 namespace llvm {
   
 class formatted_raw_ostream;
@@ -69,6 +71,7 @@ public:
   }
 
   // Set up the pass pipeline.
+  virtual bool addWakTest(PassManagerBase &PM, CodeGenOpt::Level OptLevel); // wak
   virtual bool addInstSelector(PassManagerBase &PM, CodeGenOpt::Level OptLevel);
   virtual bool addPreRegAlloc(PassManagerBase &PM, CodeGenOpt::Level OptLevel);
   virtual bool addPostRegAlloc(PassManagerBase &PM, CodeGenOpt::Level OptLevel);
@@ -122,6 +125,7 @@ public:
     return &TSInfo;
   }
   virtual const X86InstrInfo     *getInstrInfo() const {
+	  //fprintf(stderr, "getInstrInfo hello\n");
     return &InstrInfo;
   }
   virtual       X86JITInfo       *getJITInfo()         {

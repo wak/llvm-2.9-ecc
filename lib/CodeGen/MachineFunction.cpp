@@ -282,6 +282,7 @@ void MachineFunction::dump() const {
 }
 
 void MachineFunction::print(raw_ostream &OS, SlotIndexes *Indexes) const {
+  // wak: MachineFunction#debug()は，これを呼ぶ
   OS << "# Machine code for function " << Fn->getName() << ":\n";
 
   // Print Frame Information
@@ -328,6 +329,7 @@ void MachineFunction::print(raw_ostream &OS, SlotIndexes *Indexes) const {
     OS << '\n';
   }
   
+  // wak: BasicBlockのダンプ
   for (const_iterator BB = begin(), E = end(); BB != E; ++BB) {
     OS << '\n';
     BB->print(OS, Indexes);

@@ -3063,6 +3063,7 @@ SDValue SelectionDAG::getNode(unsigned Opcode, DebugLoc DL, EVT VT,
       return SDValue(E, 0);
 
     N = new (NodeAllocator) BinarySDNode(Opcode, DL, VTs, N1, N2);
+    // errs() << "wak: call test " << N->getClassName() << "\n"; //wak
     CSEMap.InsertNode(N, IP);
   } else {
     N = new (NodeAllocator) BinarySDNode(Opcode, DL, VTs, N1, N2);
@@ -6042,6 +6043,7 @@ void SDNode::print_types(raw_ostream &OS, const SelectionDAG *G) const {
   OS << " = " << getOperationName(G);
 }
 
+// wak: .dot
 void SDNode::print_details(raw_ostream &OS, const SelectionDAG *G) const {
   if (const MachineSDNode *MN = dyn_cast<MachineSDNode>(this)) {
     if (!MN->memoperands_empty()) {
@@ -6166,6 +6168,8 @@ void SDNode::print_details(raw_ostream &OS, const SelectionDAG *G) const {
     OS << ">";
   } else if (const MemSDNode* M = dyn_cast<MemSDNode>(this)) {
     OS << "<" << *M->getMemOperand() << ">";
+    if (M->getSrcValue()->isecc)
+      OS << " <ECC>";                        // wak
   } else if (const BlockAddressSDNode *BA =
                dyn_cast<BlockAddressSDNode>(this)) {
     OS << "<";
@@ -6422,6 +6426,8 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
   return 0;
 }
 
+// wak: SelectionDAGのダンプ
+// ここでダンプするrootは，setRoot()で設定したSDNode．
 void SelectionDAG::dump() const {
   dbgs() << "SelectionDAG has " << AllNodes.size() << " nodes:";
 

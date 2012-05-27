@@ -2051,6 +2051,8 @@ bool CPPTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
                                            CodeGenOpt::Level OptLevel,
                                            bool DisableVerify) {
   if (FileType != TargetMachine::CGFT_AssemblyFile) return true;
+  if (OptWakDebugPass)
+    fprintf(stderr, "wak: addPassesToEmitFile CPPBackend.cpp\n");
   PM.add(new CppWriter(o));
   return false;
 }

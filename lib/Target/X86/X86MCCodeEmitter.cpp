@@ -20,6 +20,7 @@
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/WakOptions.h"
 using namespace llvm;
 
 namespace {
@@ -132,9 +133,12 @@ MCCodeEmitter *llvm::createX86_32MCCodeEmitter(const Target &,
   return new X86MCCodeEmitter(TM, Ctx, false);
 }
 
+#include <cstdio>
 MCCodeEmitter *llvm::createX86_64MCCodeEmitter(const Target &,
                                                TargetMachine &TM,
                                                MCContext &Ctx) {
+  if (OptWakDebugPass)
+	fprintf(stderr, "I am createX86_64MCCodeEmitter\n");
   return new X86MCCodeEmitter(TM, Ctx, true);
 }
 

@@ -38,6 +38,7 @@ set(sources
   X86Subtarget.cpp
   X86TargetMachine.cpp
   X86TargetObjectFile.cpp
+  X86WakTestPass.cpp
   )
 
 if( CMAKE_CL_64 )

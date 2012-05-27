@@ -196,6 +196,7 @@ StringRef MachineBasicBlock::getName() const {
     return "(null)";
 }
 
+// wak: MachineBasicBlockのダンプ
 void MachineBasicBlock::print(raw_ostream &OS, SlotIndexes *Indexes) const {
   const MachineFunction *MF = getParent();
   if (!MF) {

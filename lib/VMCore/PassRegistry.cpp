@@ -22,6 +22,8 @@
 #include "llvm/ADT/StringMap.h"
 #include <vector>
 
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 // FIXME: We use ManagedStatic to erase the pass registrar on shutdown.
@@ -81,8 +83,9 @@ PassRegistry::~PassRegistry() {
   delete Impl;
   pImpl = 0;
 }
-
+//#include "llvm/Support/raw_ostream.h"
 const PassInfo *PassRegistry::getPassInfo(const void *TI) const {
+	//errs() << "\nwak: getPassInfos: " << TI << "\n";
   sys::SmartScopedLock<true> Guard(*Lock);
   PassRegistryImpl *Impl = static_cast<PassRegistryImpl*>(getImpl());
   PassRegistryImpl::MapType::const_iterator I = Impl->PassInfoMap.find(TI);
@@ -100,8 +103,10 @@ const PassInfo *PassRegistry::getPassInfo(StringRef Arg) const {
 //===----------------------------------------------------------------------===//
 // Pass Registration mechanism
 //
-
+#include "llvm/Support/raw_ostream.h"
 void PassRegistry::registerPass(const PassInfo &PI, bool ShouldFree) {
+  if (OptWakDebugPass)
+	errs() << "\nwak: registerPass: " << PI.getPassName() << "\n";
   sys::SmartScopedLock<true> Guard(*Lock);
   PassRegistryImpl *Impl = static_cast<PassRegistryImpl*>(getImpl());
   bool Inserted =

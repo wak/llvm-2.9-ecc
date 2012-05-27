@@ -57,6 +57,9 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 /// LimitFloatPrecision - Generate low-precision inline sequences for
@@ -861,6 +864,8 @@ void SelectionDAGBuilder::visit(const Instruction &I) {
 
   CurDebugLoc = I.getDebugLoc();
 
+  if (OptWakDebugSDB)
+    dbgs() << "wak: visit " << I.getOpcodeName() << "\n";
   visit(I.getOpcode(), I);
 
   if (!isa<TerminatorInst>(&I) && !HasTailCall)
@@ -882,6 +887,14 @@ void SelectionDAGBuilder::visit(unsigned Opcode, const User &I) {
 #define HANDLE_INST(NUM, OPCODE, CLASS) \
     case Instruction::OPCODE: visit##OPCODE((CLASS&)I); break;
 #include "llvm/Instruction.def"
+    // wak: 各種LLVM命令の分岐を作っている
+    // wak:   HANDLE_MEMORY_INST(26, Alloca, AllocaInst)  // Stack management
+    // wak:   HANDLE_MEMORY_INST(27, Load  , LoadInst  )  // Memory manipulation instrs
+    // wak:   HANDLE_MEMORY_INST(28, Store , StoreInst )
+    // wak:   ...など
+    // wak: 例: case Instruction::Alloca: visitAlloca((AllocaInst&)I); break;
+    // wak: 例: case Instruction::Load: visitLoad((LoadInst&)I); break;
+    // wak: 例: case Instruction::Store: visitStore((StoreInst&)I); break;
   }
 
   // Assign the ordering to the freshly created DAG nodes.
@@ -3067,6 +3080,14 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
 void SelectionDAGBuilder::visitStore(const StoreInst &I) {
   const Value *SrcV = I.getOperand(0);
   const Value *PtrV = I.getOperand(1);
+
+  // wak: DAG生成でためしにチェック
+  if (OptWakDebugSDB) {
+    if (SrcV->isecc)
+      errs() << "wak: visitStore() ソースオペランドが保護対象\n";
+    if (PtrV->isecc)
+      errs() << "wak: visitStore() デスティネーションオペランドが保護対象\n";
+  }
 
   SmallVector<EVT, 4> ValueVTs;
   SmallVector<uint64_t, 4> Offsets;

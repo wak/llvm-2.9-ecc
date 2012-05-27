@@ -111,11 +111,11 @@ public:
                              DenseMap<SDValue, unsigned> &VRBaseMap);
 
   /// EmitNode - Generate machine code for a node and needed dependencies.
-  ///
+  /// EmitNode - ノードとそれが依存しているもののマシンコードを生成する
   void EmitNode(SDNode *Node, bool IsClone, bool IsCloned,
                 DenseMap<SDValue, unsigned> &VRBaseMap) {
     if (Node->isMachineOpcode())
-      EmitMachineNode(Node, IsClone, IsCloned, VRBaseMap);
+      EmitMachineNode(Node, IsClone, IsCloned, VRBaseMap); /* <-- called by wak*/
     else
       EmitSpecialNode(Node, IsClone, IsCloned, VRBaseMap);
   }

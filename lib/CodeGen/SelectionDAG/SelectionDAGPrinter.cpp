@@ -29,6 +29,11 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/config.h"
+
+#include <typeinfo>             // wak
+#include <cxxabi.h>             // wak
+#include <string>               // wak
+
 using namespace llvm;
 
 namespace llvm {
@@ -101,12 +106,18 @@ namespace llvm {
       return "";
     }
 
-
+    // wak: .dot出力で，label={...の最初
     static std::string getSimpleNodeLabel(const SDNode *Node,
                                           const SelectionDAG *G) {
       std::string Result = Node->getOperationName(G);
       {
         raw_string_ostream OS(Result);
+        {
+          const char *s = Node->getClassName();
+          OS << "[type=" << s << "]";
+          // int status;
+          // OS << "[SDNode=" << abi::__cxa_demangle(typeid(*Node).name(), 0, 0, &status) << "]";
+        }
         Node->print_details(OS, G);
       }
       return Result;
@@ -269,6 +280,7 @@ void SelectionDAG::setSubgraphColor(SDNode *N, const char *Color) {
 #endif
 }
 
+// wak: ここで，.dotのlabel={...の最初の文字列が返っているはず
 std::string ScheduleDAGSDNodes::getGraphNodeLabel(const SUnit *SU) const {
   std::string s;
   raw_string_ostream O(s);

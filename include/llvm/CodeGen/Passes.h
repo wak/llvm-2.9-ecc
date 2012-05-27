@@ -97,6 +97,12 @@ namespace llvm {
   /// machine basic blocks.
   extern char &UnreachableMachineBlockElimID;
 
+
+  // - wak ----------------------
+  FunctionPass *createWakEccCheckPass(const TargetLowering *tli);
+  // ------------------------ wak
+
+
   /// DeadMachineInstructionElim pass - This pass removes dead machine
   /// instructions.
   ///

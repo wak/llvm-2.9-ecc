@@ -33,6 +33,10 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
 #include "llvm/Target/TargetOptions.h"
+
+// wak
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 namespace {
@@ -219,6 +223,8 @@ bool X86FastISel::X86FastEmitLoad(EVT VT, const X86AddressMode &AM,
   return true;
 }
 
+#include <cstdio>
+#include <cstdlib>
 /// X86FastEmitStore - Emit a machine instruction to store a value Val of
 /// type VT. The address is either pre-computed, consisted of a base ptr, Ptr
 /// and a displacement offset, or a GlobalAddress,
@@ -227,6 +233,8 @@ bool
 X86FastISel::X86FastEmitStore(EVT VT, unsigned Val,
                               const X86AddressMode &AM) {
   // Get opcode and regclass of the output for the given store instruction.
+  if (OptWakDebugISel)
+	fprintf(stderr, "wak: Store X86FastEmitStore-1\n");
   unsigned Opc = 0;
   switch (VT.getSimpleVT().SimpleTy) {
   case MVT::f80: // No f80 support yet.
@@ -258,6 +266,12 @@ X86FastISel::X86FastEmitStore(EVT VT, unsigned Val,
 
 bool X86FastISel::X86FastEmitStore(EVT VT, const Value *Val,
                                    const X86AddressMode &AM) {
+  if (OptWakDebugISel) {
+    if (Val->isecc) {
+      fprintf(stderr, "wak: ECC Value found!!\n");
+    }
+	fprintf(stderr, "wak: Store X86FastEmitStore-2\n");
+  }
   // Handle 'null' like i32/i64 0.
   if (isa<ConstantPointerNull>(Val))
     Val = Constant::getNullValue(TD.getIntPtrType(Val->getContext()));
@@ -316,6 +330,13 @@ bool X86FastISel::X86FastEmitExtend(ISD::NodeType Opc, EVT DstVT,
 bool X86FastISel::X86SelectAddress(const Value *V, X86AddressMode &AM) {
   const User *U = NULL;
   unsigned Opcode = Instruction::UserOp1;
+
+  if (OptWakDebugISel) {
+    if (V->isecc) {
+      fprintf(stderr, "wak: specified value is ECCed (X86SelectAddress)\n");
+    }
+  }
+
   if (const Instruction *I = dyn_cast<Instruction>(V)) {
     // Don't walk into other basic blocks; it's possible we haven't
     // visited them yet, so the instructions may not yet be assigned
@@ -650,6 +671,8 @@ bool X86FastISel::X86SelectCallAddress(const Value *V, X86AddressMode &AM) {
 
 /// X86SelectStore - Select and emit code to implement store instructions.
 bool X86FastISel::X86SelectStore(const Instruction *I) {
+  if (OptWakDebugISel)
+	fprintf(stderr, "wak: X86SelectStore()\n");
   MVT VT;
   if (!isTypeLegal(I->getOperand(0)->getType(), VT, /*AllowI1=*/true))
     return false;

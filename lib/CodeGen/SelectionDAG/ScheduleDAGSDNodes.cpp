@@ -649,6 +649,7 @@ static void ProcessSourceNode(SDNode *N, SelectionDAG *DAG,
 
 
 /// EmitSchedule - Emit the machine code in scheduled order.
+//  EmitSchedule - スケジュールされたオーダーで，マシンコードを出力する
 MachineBasicBlock *ScheduleDAGSDNodes::EmitSchedule() {
   InstrEmitter Emitter(BB, InsertPos);
   DenseMap<SDValue, unsigned> VRBaseMap;
@@ -697,6 +698,7 @@ MachineBasicBlock *ScheduleDAGSDNodes::EmitSchedule() {
         ProcessSourceNode(N, DAG, Emitter, VRBaseMap, Orders, Seen);
       GluedNodes.pop_back();
     }
+    // wak: ここで命令生成？
     Emitter.EmitNode(SU->getNode(), SU->OrigNode != SU, SU->isCloned,
                      VRBaseMap);
     // Remember the source order of the inserted instruction.

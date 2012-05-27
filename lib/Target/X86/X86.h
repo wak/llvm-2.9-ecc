@@ -32,6 +32,10 @@ class X86TargetMachine;
 class formatted_raw_ostream;
 class raw_ostream;
 
+// wak:
+// WakTest - WakTest
+FunctionPass *createX86WakTest(X86TargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
+
 /// createX86ISelDag - This pass converts a legalized DAG into a 
 /// X86-specific DAG, ready for instruction scheduling.
 ///

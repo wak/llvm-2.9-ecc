@@ -5,6 +5,7 @@ if( MINGW )
 endif()
 
 add_llvm_library(LLVMSupport
+  WakOptions.cpp
   APFloat.cpp
   APInt.cpp
   APSInt.cpp

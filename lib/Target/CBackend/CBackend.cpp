@@ -50,6 +50,11 @@
 #include "llvm/Support/Host.h"
 #include "llvm/Config/config.h"
 #include <algorithm>
+
+// wak
+#include "llvm/Support/CommandLine.h"
+extern cl::opt<bool> OptWakDebugPass;
+
 // Some ms header decided to define setjmp as _setjmp, undo this for this file.
 #ifdef _MSC_VER
 #undef setjmp
@@ -3580,7 +3585,8 @@ bool CTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
                                          CodeGenOpt::Level OptLevel,
                                          bool DisableVerify) {
   if (FileType != TargetMachine::CGFT_AssemblyFile) return true;
-
+  if (OptWakDebugPass)
+    fprintf(stderr, "wak: addPassesToEmitFile CBackend.cpp\n");
   PM.add(createGCLoweringPass());
   PM.add(createLowerInvokePass());
   PM.add(createCFGSimplificationPass());   // clean up after lower invoke.

@@ -19,6 +19,9 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/PassNameParser.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
@@ -275,13 +278,17 @@ AnalysisUsage &AnalysisUsage::addPreserved(StringRef Arg) {
   if (PI) Preserved.push_back(PI->getTypeInfo());
   return *this;
 }
-
+#include "llvm/Support/raw_ostream.h"
 AnalysisUsage &AnalysisUsage::addRequiredID(const void *ID) {
+  if (OptWakDebugPass)
+    errs() << "\nwak: addRequiredID void *[" << ID << "]\n";
   Required.push_back(ID);
   return *this;
 }
 
 AnalysisUsage &AnalysisUsage::addRequiredID(char &ID) {
+  if (OptWakDebugPass)
+	errs() << "\nwak: addRequiredID char &[" << ID+0 << "]\n";
   Required.push_back(&ID);
   return *this;
 }
