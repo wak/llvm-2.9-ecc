@@ -5,8 +5,10 @@
 #include "llvm/Support/raw_ostream.h" // for errs()
 
 // #include "llvm/WakOptions.h"
+// Impl: lib/Support/WakOptions.cpp
 
 namespace llvm {
+  extern cl::opt<bool> OptEccIR;
   extern cl::opt<bool> OptWakDebugAroundMBB;
   extern cl::opt<bool> OptWakDebugAroundTargetMachine;
   extern cl::opt<bool> OptWakDebugSDB;

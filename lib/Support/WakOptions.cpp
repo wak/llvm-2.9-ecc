@@ -3,6 +3,11 @@
 
 namespace llvm {
 cl::opt<bool>
+OptEccIR("wak-ecc-ir", cl::Hidden,
+         cl::desc("IR出力にECC情報を付ける"));
+
+
+cl::opt<bool>
 OptWakDebugAroundTargetMachine("wak-debug-target-machine", cl::Hidden,
                                cl::desc("LLVMTargetMachine.cpp関連のデバッグ情報を表示"));
 
