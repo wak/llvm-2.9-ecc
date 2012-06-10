@@ -40,6 +40,9 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+
+#include "llvm/WakOptions.h"
+
 using namespace llvm;
 
 // Make virtual table appear in this compilation unit.
@@ -1123,6 +1126,10 @@ static void WriteAsOperandInternal(raw_ostream &Out, const Value *V,
                                    TypePrinting *TypePrinter,
                                    SlotTracker *Machine,
                                    const Module *Context) {
+  // wak
+  if (OptEccIR && V->isecc)
+    Out << "[ECC]";
+
   if (V->hasName()) {
     PrintLLVMName(Out, V);
     return;
@@ -2143,6 +2150,9 @@ void Value::print(raw_ostream &ROS, AssemblyAnnotationWriter *AAW) const {
   } else {
     // Otherwise we don't know what it is. Call the virtual function to
     // allow a subclass to print itself.
+    // wak: このパターンが出てきたときは，わかりやすいようにメッセージを出しておく
+    errs() << "wak: printCustom() called. See Value::print() !!\n";
+    OS << "[wak: printCustom() call ->]";
     printCustom(OS);
   }
 }
