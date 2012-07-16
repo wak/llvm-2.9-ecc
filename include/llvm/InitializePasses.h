@@ -126,6 +126,7 @@ void initializeLiveDebugVariablesPass(PassRegistry&);
 void initializeLiveIntervalsPass(PassRegistry&);
 // - wak -------------
 void initializeWakEccCheckPass(PassRegistry&);
+void initializeWakDuplicateInsnTestPass(PassRegistry&);
 // ---------------- wak
 void initializeLiveStacksPass(PassRegistry&);
 void initializeLiveVariablesPass(PassRegistry&);

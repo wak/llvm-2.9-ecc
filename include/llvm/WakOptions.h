@@ -18,6 +18,7 @@ namespace llvm {
   extern cl::opt<bool> OptWakDebugSay;
   extern cl::opt<bool> OptWakAddFunctionPass;
   extern cl::opt<bool> OptWakAddMachineFunctionPass;
+  extern cl::opt<bool> OptWakAddDuplicateInsnTestPass;
 }
 
 #endif

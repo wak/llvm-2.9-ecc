@@ -44,4 +44,8 @@ OptWakAddFunctionPass("wak-add-FP", cl::Hidden,
 cl::opt<bool>
 OptWakAddMachineFunctionPass("wak-add-MFP", cl::Hidden,
                              cl::desc("MachineFunctionPass WakEccCheckPassをパスに追加"));
+
+cl::opt<bool>
+OptWakAddDuplicateInsnTestPass("wak-add-DIT", cl::Hidden,
+                               cl::desc("ECC値複製用のを命令を挿入するパスを追加 (WakDuplicateInsnTestPass)"));
 }

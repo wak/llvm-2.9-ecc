@@ -100,6 +100,7 @@ namespace llvm {
 
   // - wak ----------------------
   FunctionPass *createWakEccCheckPass(const TargetLowering *tli);
+  FunctionPass *createWakDuplicateInsnTestPass(const TargetLowering *tli);
   // ------------------------ wak
 
 

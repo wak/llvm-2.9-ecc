@@ -325,6 +325,10 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
   if (OptWakAddMachineFunctionPass)
     PM.add(createWakEccCheckPass(getTargetLowering()));
 
+  // wak
+  if (OptWakAddDuplicateInsnTestPass)
+    PM.add(createWakDuplicateInsnTestPass(getTargetLowering()));
+
   addPreISel(PM, OptLevel);
 
   if (PrintISelInput)
