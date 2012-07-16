@@ -1128,7 +1128,7 @@ static void WriteAsOperandInternal(raw_ostream &Out, const Value *V,
                                    const Module *Context) {
   // wak
   if (OptEccIR && V->isecc)
-    Out << "[ECC]";
+    Out << "[ECC-" << V << "]";
 
   if (V->hasName()) {
     PrintLLVMName(Out, V);
@@ -1747,6 +1747,7 @@ void AssemblyWriter::printInfoComment(const Value &V) {
   }
 }
 
+// wak: ここで命令出力
 // This member is called for each Instruction in a function..
 void AssemblyWriter::printInstruction(const Instruction &I) {
   if (AnnotationWriter) AnnotationWriter->emitInstructionAnnot(&I, Out);
@@ -1775,6 +1776,10 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
     // If this is a call, check if it's a tail call.
     Out << "tail ";
   }
+
+  // wak: 命令にECCがついている場合は，表示する
+  if (I.isecc)
+    Out << "[ECC-" << &cast<Value>(I) << "]";
 
   // Print out the opcode...
   Out << I.getOpcodeName();
