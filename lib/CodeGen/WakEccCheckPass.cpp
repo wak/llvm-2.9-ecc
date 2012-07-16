@@ -1,4 +1,4 @@
-#define DEBUG_TYPE "stack-protector"
+#define DEBUG_TYPE "wak-ecc-check"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/Attributes.h"
@@ -14,44 +14,38 @@
 #include "llvm/Target/TargetLowering.h"
 using namespace llvm;
 
-// SSPBufferSize - The lower bound for a buffer to be considered for stack
-// smashing protection.
-static cl::opt<unsigned>
-SSPBufferSize("stack-protector-buffer-size", cl::init(8),
-              cl::desc("Lower bound for a buffer to be considered for "
-                       "stack protection"));
-
 namespace {
   class WakEccCheck : public FunctionPass {
   public:
-		static char ID;
-		WakEccCheck() : FunctionPass(ID) {
+    static char ID;
+    WakEccCheck() : FunctionPass(ID) {
       initializeStackProtectorPass(*PassRegistry::getPassRegistry());
     }
 
   private:
-		virtual bool runOnFunction(Function &F) {
-			errs() << "Wak Pass: runOnFunction(";
-			errs().write_escaped(F.getName()) << ")\n";
-			Function::iterator i = F.begin();
-			for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
-				// for each block
-				for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; I++) {
-					// for each instruction
-					errs() << "Wak Pass: opcode = " << I->getOpcode() << "\n";
-					for (Instruction::op_iterator O = I->op_begin(), E = I->op_end(); O != E; O++) {
-						// O: Use *
-						Value *v = O->get();
-						errs () << "  Operand: " << v << " (ECC: " << v->isecc << ")\n";
-					}
-				}
-			}
-			return false;
-		}
-		virtual const char *getPassName() const {
-			return "WakPass";
-		}
-	};
+    virtual bool runOnFunction(Function &F) {
+      errs() << "Wak Pass: runOnFunction(";
+      errs().write_escaped(F.getName()) << ")\n";
+
+      Function::iterator i = F.begin();
+      for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
+        // for each block
+        for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; I++) {
+          // for each instruction
+          errs() << "Wak Pass: opcode = " << I->getOpcode() << "\n";
+          for (Instruction::op_iterator O = I->op_begin(), E = I->op_end(); O != E; O++) {
+            // O: Use *
+            Value *v = O->get();
+            errs () << "  Operand: " << v << " (ECC: " << v->isecc << ")\n";
+          }
+        }
+      }
+      return false;
+    }
+    virtual const char *getPassName() const {
+      return "WakPass";
+    }
+  };
 }
 
 char WakEccCheck::ID = 0;
