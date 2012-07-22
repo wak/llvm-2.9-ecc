@@ -2023,7 +2023,6 @@ static unsigned getLoadStoreRegOpcode(unsigned Reg,
                                       bool isStackAligned,
                                       const TargetMachine &TM,
                                       bool load) {
-	fprintf(stderr, "getLoadStoreRegOpcode\n");
   switch (RC->getID()) {
   default:
     llvm_unreachable("Unknown regclass");
