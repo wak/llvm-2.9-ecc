@@ -84,7 +84,8 @@ X86ELFMCAsmInfo::X86ELFMCAsmInfo(const Triple &T) {
 
   TextAlignFillValue = 0x90;
 
-  PrivateGlobalPrefix = ".Lmofu";	     // wak
+  // wak: ラベル出力
+  PrivateGlobalPrefix = ".L";
   WeakRefDirective = "\t.weak\t";
   PCSymbol = ".";
 
