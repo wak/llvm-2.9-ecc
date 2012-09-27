@@ -389,6 +389,10 @@ public:
   virtual bool addWakTest(PassManagerBase &PM, CodeGenOpt::Level OptLevel) {
     return true;
   }
+  // X86WakDuplicateInsnTestPass
+  virtual bool addX86WakDuplicateInsnTestPass(PassManagerBase &PM, CodeGenOpt::Level OptLevel) {
+    return true;
+  }
 };
 
 } // End llvm namespace

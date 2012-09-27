@@ -35,6 +35,8 @@ class raw_ostream;
 // wak:
 // WakTest - WakTest
 FunctionPass *createX86WakTest(X86TargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
+// X86WakDuplicateTestPass - Duplication Test on MFP
+FunctionPass *createX86WakDuplicateInsnTestPass(X86TargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
 
 /// createX86ISelDag - This pass converts a legalized DAG into a 
 /// X86-specific DAG, ready for instruction scheduling.

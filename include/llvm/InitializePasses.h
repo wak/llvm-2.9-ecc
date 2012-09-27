@@ -21,6 +21,7 @@ class PassRegistry;
 
 // wak
 void initializeWakTestPass(PassRegistry&);
+void initializeX86WakDuplicateInsnTestPass(PassRegistry&);
 
 /// initializeCore - Initialize all passes linked into the
 /// TransformUtils library.
@@ -127,6 +128,7 @@ void initializeLiveIntervalsPass(PassRegistry&);
 // - wak -------------
 void initializeWakEccCheckPass(PassRegistry&);
 void initializeWakDuplicateInsnTestPass(PassRegistry&);
+void initializeWakHammingEccPass(PassRegistry&);
 // ---------------- wak
 void initializeLiveStacksPass(PassRegistry&);
 void initializeLiveVariablesPass(PassRegistry&);

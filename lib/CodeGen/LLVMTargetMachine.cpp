@@ -329,6 +329,10 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
   if (OptWakAddDuplicateInsnTestPass)
     PM.add(createWakDuplicateInsnTestPass(getTargetLowering()));
 
+  // wak
+  if (OptWakHammingEccPass)
+    PM.add(createWakHammingEccPass(getTargetLowering()));
+
   addPreISel(PM, OptLevel);
 
   if (PrintISelInput)
@@ -420,6 +424,12 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
   // Perform register allocation.
   PM.add(createRegisterAllocator(OptLevel));
   printAndVerify(PM, "After Register Allocation");
+
+
+  // wak: my test pass
+  if (OptWakAddX86DuplicateInsnTestPass)
+    addX86WakDuplicateInsnTestPass(PM, OptLevel);
+
 
   // Perform stack slot coloring and post-ra machine LICM.
   if (OptLevel != CodeGenOpt::None) {

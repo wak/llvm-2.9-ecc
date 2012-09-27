@@ -1098,6 +1098,12 @@ GetElementPtrInst::GetElementPtrInst(const GetElementPtrInst &GEPI)
   for (unsigned i = 0, E = NumOperands; i != E; ++i)
     OL[i] = GEPIOL[i];
   SubclassOptionalData = GEPI.SubclassOptionalData;
+
+  // wak
+  if (GEPI.isecc) {
+    this->isecc = true;
+    errs() << "wak: GetElementPtrInst copy constructor: copy ecc";
+  }
 }
 
 GetElementPtrInst::GetElementPtrInst(Value *Ptr, Value *Idx,

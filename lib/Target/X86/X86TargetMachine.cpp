@@ -282,3 +282,10 @@ bool X86TargetMachine::addWakTest(PassManagerBase &PM, CodeGenOpt::Level OptLeve
     errs() << "wak: my test pass added";
   return false;
 }
+
+bool X86TargetMachine::addX86WakDuplicateInsnTestPass(PassManagerBase &PM, CodeGenOpt::Level OptLevel) {
+  PM.add(createX86WakDuplicateInsnTestPass(*this, OptLevel));
+  if (OptWakDebugPass)
+    errs() << "wak: add WakDuplicateTestPass\n";
+  return false;
+}

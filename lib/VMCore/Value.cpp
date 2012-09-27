@@ -43,7 +43,7 @@ static inline const Type *checkType(const Type *Ty) {
 Value::Value(const Type *ty, unsigned scid)
   : SubclassID(scid), HasValueHandle(0),
     SubclassOptionalData(0), SubclassData(0), VTy(checkType(ty)),
-    UseList(0), Name(0), isecc(false) {      // wak: isecc
+    UseList(0), Name(0), isecc(false), isecc_inserted(false) {      // wak: isecc
   if (isa<CallInst>(this) || isa<InvokeInst>(this))
     assert((VTy->isFirstClassType() || VTy->isVoidTy() ||
             ty->isOpaqueTy() || VTy->isStructTy()) &&

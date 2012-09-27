@@ -48,4 +48,13 @@ OptWakAddMachineFunctionPass("wak-add-MFP", cl::Hidden,
 cl::opt<bool>
 OptWakAddDuplicateInsnTestPass("wak-add-DIT", cl::Hidden,
                                cl::desc("ECC値複製用のを命令を挿入するパスを追加 (WakDuplicateInsnTestPass)"));
+
+cl::opt<bool>
+OptWakAddX86DuplicateInsnTestPass("wak-add-DIT-MFP", cl::Hidden,
+                                  cl::desc("MachineFunctionPass WakDuplicateTestPassをパスに追加"));
+
+
+cl::opt<bool>
+OptWakHammingEccPass("wak-add-hamming-FP", cl::Hidden,
+                     cl::desc("MachineFunctionPass WakDuplicateTestPassをパスに追加"));
 }

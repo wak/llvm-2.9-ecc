@@ -19,6 +19,8 @@ namespace llvm {
   extern cl::opt<bool> OptWakAddFunctionPass;
   extern cl::opt<bool> OptWakAddMachineFunctionPass;
   extern cl::opt<bool> OptWakAddDuplicateInsnTestPass;
+  extern cl::opt<bool> OptWakAddX86DuplicateInsnTestPass;
+  extern cl::opt<bool> OptWakHammingEccPass;
 }
 
 #endif

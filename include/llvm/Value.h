@@ -97,6 +97,8 @@ protected:
 public:
   // wak
   bool isecc;
+  bool isecc_inserted;
+
   virtual ~Value();
 
   /// dump - Support for debugging, callable in GDB: V->dump()

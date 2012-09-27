@@ -72,6 +72,7 @@ public:
 
   // Set up the pass pipeline.
   virtual bool addWakTest(PassManagerBase &PM, CodeGenOpt::Level OptLevel); // wak
+  virtual bool addX86WakDuplicateInsnTestPass(PassManagerBase &PM, CodeGenOpt::Level OptLevel); // wak
   virtual bool addInstSelector(PassManagerBase &PM, CodeGenOpt::Level OptLevel);
   virtual bool addPreRegAlloc(PassManagerBase &PM, CodeGenOpt::Level OptLevel);
   virtual bool addPostRegAlloc(PassManagerBase &PM, CodeGenOpt::Level OptLevel);
