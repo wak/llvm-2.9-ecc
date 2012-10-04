@@ -43,6 +43,56 @@ namespace {
     }
 
   private:
+
+    unsigned int getPointerSizeInBits() const {
+      switch (FUNC->getParent()->getPointerSize()) {
+      case Module::Pointer32:
+        return 32;
+      case Module::Pointer64:
+        return 64;
+      case Module::AnyPointerSize:
+        report_fatal_error("getPointerSizeInBits(): unknown pointer size\n");
+      default:
+        assert(0 && "unknown pointer type");
+      }
+      assert(0 && "No here");
+    }
+
+    void insertStoreTest(BasicBlock::iterator &insn_iter) {
+      StoreInst *insn = dyn_cast<StoreInst>(insn_iter);
+
+      // @todo: ここでiteratorを++しておくので，呼び出し元もちゃんといけるか？
+      IRBuilder<true, ConstantFolder, IRBuilderDefaultInserter<true> > B(insn->getParent(), ++insn_iter);
+
+      // 更新関数を取得
+      Function *update_bits_function = FUNC->getParent()->getFunction("ecc_update_ecc_data_bits");
+      if (update_bits_function == NULL)
+        report_fatal_error("ECC update function not found (ecc_update_ecc_data_int)");
+
+      // 更新される（された）サイズを取得
+      unsigned size = 0;
+      const Type *destTy = insn->getPointerOperand()->getType();
+      if (const PointerType *ptrTy = dyn_cast<PointerType>(destTy)) {
+        const Type *containedTy = ptrTy->getContainedType(0);
+        if (containedTy->isPointerTy())
+          // (1) int *p;  => sizeof(*p) = sizeof(int)
+          size = getPointerSizeInBits();
+        else
+          // (2) int **p; => sizeof(*p) = sizeof(int *)
+          size = containedTy->getPrimitiveSizeInBits();
+      } else {
+        // (3) int v; => sizeof(v) = sizeof(int)
+        size = destTy->getPrimitiveSizeInBits();
+      }
+
+      // 関数呼出し命令挿入
+      // ecc_update_ecc_data_bits((void *) pointerOperand, target_size_in_bits);
+      B.CreateCall2(update_bits_function,
+                    B.CreatePointerCast(insn->getPointerOperand(), B.getInt8PtrTy()),
+                    B.getInt64(size));
+    }
+
+
     void insertDupStoreInsn(BasicBlock::iterator &insn_iter,
                             unsigned long copy_base_addr) {
       /*
@@ -113,7 +163,7 @@ namespace {
         report_fatal_error("wak: BB does not have terminator!");
     }
 
-    bool insertCheckInstructions(Function &F) {
+    bool insertInstructionsForRead(Function &F) {
       bool changed = false;
 
       errs() << "- [DIT: insert check instructions ]\n";
@@ -134,23 +184,65 @@ namespace {
       return changed;
     }
 
-    Value *checkPointerHasEccValue(StoreInst *StoreInsn) {
-      LoadInst *load_i = dyn_cast<LoadInst>(StoreInsn->getPointerOperand());
-      // define void @assign_to_pointer_var() nounwind {
-      // entry:
-      //   %ecc_ptr = [ECC-0x4b59288]alloca i32*, align 8
-      //   store i32* @ecc_g_var, i32** [ECC-0x4b59288]%ecc_ptr, align 8
-      //   %tmp = load i32** [ECC-0x4b59288]%ecc_ptr, align 8
-      //   store i32 300, i32* %tmp
-      //   ret void
-      // }
+    Value *checkPointerHasEccValue(Value *pointerOperand) {
+      assert(isEccPointerVariable(pointerOperand));
 
-      // int **p _ecc_; みたいなのは，pは保護しないが，*pは保護する
-      // 従って，一段Load命令が挟まっているはず．
-      if (!load_i)
+      // ポインタルール
+      //   ポインタ変数に_ecc_(level = 0)を指定した場合，
+      //   実体からlevel個分のポインタをチェックする
+      //
+      //   - 例1: int **p __attribute__((ecc(0)));
+      //     - p   = ... なし
+      //     - *p  = ... なし
+      //     - **p = ... 保護
+      //   - 例1: int **p __attribute__((ecc(1)));
+      //     - p   = ... なし
+      //     - *p  = ... 保護
+      //     - **p = ... 保護
+      //
+      // アルゴリズム（代入時）
+      //   1. 祖先を辿り，ECC付きかチェックする
+      //   2. levelを取得する
+      //   3. 代入する型をチェックし，ポインタの階層がlevel内かチェックする
+      //
+      // アルゴリズム（参照時）
+      //   - 代入時アルゴリズムでOK?
+
+
+      // isEccPointerVariable()でポインタであることはチェックしてある
+      size_t nr_dereferences = 0;
+      Value *currentValue = pointerOperand;
+      while (Instruction *currentInst = dyn_cast<Instruction>(currentValue)) {
+        if (currentValue->isecc)
+          break;
+
+        if (LoadInst *loadInst = dyn_cast<LoadInst>(currentInst)) {
+          // ポインタを剥がす場合は，load命令が入る
+          currentValue = loadInst->getPointerOperand();
+        } else if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(currentInst)) {
+          // 配列を参照する場合は，GEP命令が入る
+          currentValue = gepInst->getPointerOperand();
+        } else {
+          break;
+        }
+        nr_dereferences ++;
+      }
+
+      if (currentValue && !currentValue->isecc)
         return NULL;
-      if (load_i->getPointerOperand()->isecc)
-        return load_i->getPointerOperand();
+
+      if (const PointerType *ty = dyn_cast<PointerType>(pointerOperand->getType())) {
+        // 今は，level == 0のみなので…
+        if (!ty->getContainedType(0)->isPointerTy())
+          return currentValue;
+      }
+
+      return NULL;
+
+      // if (!load_i)
+      //   return NULL;
+      // if (load_i->getPointerOperand()->isecc)
+      //   return load_i->getPointerOperand();
 
       return NULL;
       // dont use
@@ -169,78 +261,107 @@ namespace {
       */
     }
 
-    bool insertDuplicationInstructions(Function &F) {
+    bool isEccPointerVariable(Value *pointerOperand) {
+      const Type *destTy = pointerOperand->getType();
+
+      // storeのオペランドはポインタのはず
+      assert(destTy->isPointerTy() && "store's operand must pointer");
+
+      if (dyn_cast<LoadInst>(pointerOperand))
+        // 間にload命令が挟まっている場合は，ポインタを剥がして代入するケース
+        return true;
+
+      if (const PointerType *ptrTy = dyn_cast<PointerType>(destTy)) {
+        if (!ptrTy->getContainedType(0)->isPointerTy()) {
+          // loadが挟まっておらず，ポインタを一つ剥がした結果，それがポインタでな
+          // ければ，実体．int i; i = value;
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    Value *getEccProtectedOperand(Value *pointerOperand) {
+      // ポインタ
+      // ポインタECC変数か？
+      if (isEccPointerVariable(pointerOperand)) {
+          errs() << "[pointer] ";
+        if (Value *operand = checkPointerHasEccValue(pointerOperand)) {
+          return operand;
+        }
+        return NULL;
+      }
+
+      // @todo: これは何だ？
+      // 変数アクセスでも，（ここのコード位置で見つかる）ポインタは違う．
+      if (pointerOperand->isecc &&
+          pointerOperand->getType()->getNumContainedTypes() > 0 &&
+          pointerOperand->getType()->getContainedType(0)->isPointerTy()) {
+        // do nothing: int *ptr _ecc_ = &var;
+
+        // これが無いと死ぬ．たぶん，テスト用プログラムのプロトタイプ宣言と型が一
+        // 致していないから．ポインタとポインタのポインタ？
+        return NULL;
+      }
+
+      // 変数アクセス
+      if (pointerOperand->isecc) {
+        errs() << "[var] ";
+        return pointerOperand;
+      }
+
+      // 構造体メンバその1
+      if (GetElementPtrInst *gep_inst = dyn_cast<GetElementPtrInst>(pointerOperand)) {
+        errs() << "[struct member] ";
+        if (gep_inst->getPointerOperand()->isecc) {
+          return gep_inst->getPointerOperand();
+        }
+      }
+
+      // 構造体メンバその2 （アドレスが固定の場合: 例.グローバル変数）
+      if (ConstantExpr *expr = dyn_cast<ConstantExpr>(pointerOperand)) {
+        errs() << "[struct member] ";
+        if (expr->getOpcode() == Instruction::GetElementPtr &&
+            expr->getNumOperands() > 0 &&
+            expr->getOperand(0)->isecc) {
+          return expr->getOperand(0);
+        } else {
+          errs() << "OP: " << expr->getOpcode() << "  INST: " << Instruction::GetElementPtr << "\n";
+        }
+      }
+
+      return NULL;
+    }
+
+    bool insertInstructionsForWrite(Function &F) {
       bool changed = false;
 
       errs() << "- [DIT: insert duplication instructions ]\n";
 
       for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
-        // for each block
+        // 各ブロックを処理する
+
         for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; I++) {
-          // for each instruction
-          const Value *ecc = NULL;
+          // 各命令を処理する
+          errs() << "\n";
+          errs() << "inst: " << I->getOpcodeName() << " ";
 
-          errs() << "inst: " << I->getOpcodeName() << "\n";
+          StoreInst *store_insn = dyn_cast<StoreInst>(I);
+          if (store_insn == NULL)
+            continue;
 
-          if (StoreInst *store_insn = dyn_cast<StoreInst>(I)) {
-            Value *pointerOperand = store_insn->getPointerOperand();
-
-            // ポインタ
-            if ((ecc = checkPointerHasEccValue(store_insn)) != NULL) {
-              errs() << "[pointer] ";
-              goto found;
-            }
-
-            // 変数アクセスでも，（ここのコード位置で見つかる）ポインタは違う．
-            if (pointerOperand->isecc &&
-                pointerOperand->getType()->getNumContainedTypes() > 0 &&
-                pointerOperand->getType()->getContainedType(0)->isPointerTy()) {
-              // do nothing: int *ptr _ecc_ = &var;
-              goto skip;
-            }
-
-            // 変数アクセス
-            if (pointerOperand->isecc) {
-              errs() << "[var] ";
-              ecc = pointerOperand;
-              goto found;
-            }
-
-            // 構造体メンバその1
-            if (GetElementPtrInst *get_insn =
-                dyn_cast<GetElementPtrInst>(pointerOperand)) {
-              errs() << "[struct member] ";
-              if (get_insn->getPointerOperand()->isecc) {
-                  ecc = get_insn->getPointerOperand();
-                  goto found;
-              }
-            }
-
-            // 構造体メンバその2 （アドレスが固定の場合: 例.グローバル変数）
-            if (ConstantExpr *expr = dyn_cast<ConstantExpr>(pointerOperand)) {
-              errs() << "[struct member] ";
-              if (expr->getOpcode() == Instruction::GetElementPtr &&
-                  expr->getNumOperands() > 0 &&
-                  expr->getOperand(0)->isecc) {
-                ecc = expr->getOperand(0);
-                goto found;
-              } else {
-                errs() << "OP: " << expr->getOpcode() << "  INST: "
-                       << Instruction::GetElementPtr << "\n";
-              }
-            }
-          }
-
-          found:
-          skip:
+          Value *ecc = getEccProtectedOperand(store_insn->getPointerOperand());
           if (ecc) {
-            errs() << "  Store instruction with ecc lvalue found [" << ecc << "].\n";
-            insertDupStoreInsn(I, 0x1000000000);
+            errs() << "\n  Store instruction with ecc lvalue found [" << ecc << "].\n";
+            insertStoreTest(I);
+            // insertDupStoreInsn(I, 0x1000000000);
             // insertDupStoreInsn(I, 0x2000000000);
             changed = true;
           }
         }
       }
+      errs() << "\n";
 
       return changed;
     }
@@ -255,13 +376,13 @@ namespace {
       errs().write_escaped(F.getName());
       errs() << "\n\n";
 
-      if (insertDuplicationInstructions(F)) // 代入時に複製を作る
+      if (insertInstructionsForWrite(F)) // 代入時に複製を作る
         changed = true;
-      if (insertCheckInstructions(F)) // 参照時に複製を作る
-        changed = true;
+      //if (insertInstructionsForRead(F)) // 参照時に複製を作る
+      //changed = true;
 
       errs() << "-------------------- [wak] --------------------\n\n";
-      return true;
+      return changed;
     }
 
     virtual const char *getPassName() const {
