@@ -184,6 +184,15 @@ namespace {
       return changed;
     }
 
+    // 単純に，ポインタがいくつ挟まっているかを数える．
+    int countPointerWraps(const Type *type) {
+      int count;
+
+      for (count = 0; type->isPointerTy(); count++)
+        type = type->getContainedType(0);
+      return count;
+    }
+
     Value *checkPointerHasEccValue(Value *pointerOperand) {
       assert(isEccPointerVariable(pointerOperand));
 
@@ -231,11 +240,26 @@ namespace {
       if (currentValue && !currentValue->isecc)
         return NULL;
 
-      if (const PointerType *ty = dyn_cast<PointerType>(pointerOperand->getType())) {
-        // 今は，level == 0のみなので…
-        if (!ty->getContainedType(0)->isPointerTy())
-          return currentValue;
-      }
+      int protectRefLevel = currentValue->ecc_reference_level;
+      int toWraps         = countPointerWraps(pointerOperand->getType());
+      int rootWraps       = countPointerWraps(currentValue->getType());
+      assert(toWraps <= rootWraps);
+
+      errs() << "RefLevel = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps;
+
+      if (protectRefLevel < 0)
+        return currentValue;
+
+      // StoreのpointerOperandは，変更したいアドレスへのポインタなので，
+      // 一つポインタが多く被さっている．そのため，+1が必要．
+      if (toWraps <= protectRefLevel + 1)
+        return currentValue;
+
+      // if (const PointerType *ty = dyn_cast<PointerType>(pointerOperand->getType())) {
+      //   // 今は，level == 0のみなので…
+      //   if (!ty->getContainedType(0)->isPointerTy())
+      //     return currentValue;
+      // }
 
       return NULL;
 

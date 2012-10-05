@@ -98,6 +98,7 @@ public:
   // wak
   bool isecc;
   bool isecc_inserted;
+  int ecc_reference_level;
 
   virtual ~Value();
 
