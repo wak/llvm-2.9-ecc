@@ -194,11 +194,12 @@ namespace {
     }
 
     Value *checkPointerHasEccValue(Value *pointerOperand) {
-      assert(isEccPointerVariable(pointerOperand));
+      assert(isPointerOperation(pointerOperand, false));
 
       // ポインタルール
       //   ポインタ変数に_ecc_(level = 0)を指定した場合，
-      //   実体からlevel個分のポインタをチェックする
+      //   実体とlevel個分のポインタを保護する．
+      //   level = -1の時は，ポインタを辿る全てを保護する．
       //
       //   - 例1: int **p __attribute__((ecc(0)));
       //     - p   = ... なし
@@ -218,23 +219,28 @@ namespace {
       //   - 代入時アルゴリズムでOK?
 
 
-      // isEccPointerVariable()でポインタであることはチェックしてある
-      size_t nr_dereferences = 0;
+      // isPointerOperation()でポインタであることはチェックしてある
       Value *currentValue = pointerOperand;
-      while (Instruction *currentInst = dyn_cast<Instruction>(currentValue)) {
+      while (true) {
         if (currentValue->isecc)
           break;
 
-        if (LoadInst *loadInst = dyn_cast<LoadInst>(currentInst)) {
+        if (LoadInst *loadInst = dyn_cast<LoadInst>(currentValue)) {
           // ポインタを剥がす場合は，load命令が入る
           currentValue = loadInst->getPointerOperand();
-        } else if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(currentInst)) {
-          // 配列を参照する場合は，GEP命令が入る
+        } else if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(currentValue)) {
+          // 配列の要素や構造体メンバを参照する場合は，GEP命令が入る
           currentValue = gepInst->getPointerOperand();
+        } else  if (ConstantExpr *expr = dyn_cast<ConstantExpr>(currentValue)) {
+          if (expr->getOpcode() == Instruction::GetElementPtr &&
+              expr->getNumOperands() > 0) {
+            currentValue = expr->getOperand(0);
+          } else {
+            errs() << "[Unsupported ConstantExpr: " << expr->getOpcode() << "  INST: " << Instruction::GetElementPtr << "]\n";
+          }
         } else {
           break;
         }
-        nr_dereferences ++;
       }
 
       if (currentValue && !currentValue->isecc)
@@ -255,20 +261,8 @@ namespace {
       if (toWraps <= protectRefLevel + 1)
         return currentValue;
 
-      // if (const PointerType *ty = dyn_cast<PointerType>(pointerOperand->getType())) {
-      //   // 今は，level == 0のみなので…
-      //   if (!ty->getContainedType(0)->isPointerTy())
-      //     return currentValue;
-      // }
-
       return NULL;
 
-      // if (!load_i)
-      //   return NULL;
-      // if (load_i->getPointerOperand()->isecc)
-      //   return load_i->getPointerOperand();
-
-      return NULL;
       // dont use
       /*
       int times = 0;
@@ -285,15 +279,37 @@ namespace {
       */
     }
 
-    bool isEccPointerVariable(Value *pointerOperand) {
+    bool isPointerOperation(Value *pointerOperand, bool debug = true) {
       const Type *destTy = pointerOperand->getType();
 
       // storeのオペランドはポインタのはず
       assert(destTy->isPointerTy() && "store's operand must pointer");
 
-      if (dyn_cast<LoadInst>(pointerOperand))
-        // 間にload命令が挟まっている場合は，ポインタを剥がして代入するケース
+      // 間にload命令が挟まっている場合は，ポインタを剥がして代入するケース
+      if (dyn_cast<LoadInst>(pointerOperand)) {
+        if (debug)
+          errs() << "[pointer] ";
         return true;
+      }
+
+      // 間にgep命令が挟まっている場合は，構造体メンバか配列要素
+      if (dyn_cast<GetElementPtrInst>(pointerOperand)) {
+        if (debug)
+          errs() << "[array element or struct member] ";
+        return true;
+      }
+
+      // アドレスが固定の配列・構造体メンバ（例: グローバル変数）
+      if (ConstantExpr *expr = dyn_cast<ConstantExpr>(pointerOperand)) {
+        if (debug)
+          errs() << "[array element or struct member (constant)] ";
+        if (expr->getOpcode() == Instruction::GetElementPtr &&
+            expr->getNumOperands() > 0) {
+          return true;
+        } else {
+          errs() << "[Unsupported ConstantExpr: OP: " << expr->getOpcode() << "  INST: " << Instruction::GetElementPtr << "] ";
+        }
+      }
 
       if (const PointerType *ptrTy = dyn_cast<PointerType>(destTy)) {
         if (!ptrTy->getContainedType(0)->isPointerTy()) {
@@ -309,23 +325,11 @@ namespace {
     Value *getEccProtectedOperand(Value *pointerOperand) {
       // ポインタ
       // ポインタECC変数か？
-      if (isEccPointerVariable(pointerOperand)) {
-          errs() << "[pointer] ";
+      if (isPointerOperation(pointerOperand)) {
+        //errs() << "[pointer] ";
         if (Value *operand = checkPointerHasEccValue(pointerOperand)) {
           return operand;
         }
-        return NULL;
-      }
-
-      // @todo: これは何だ？
-      // 変数アクセスでも，（ここのコード位置で見つかる）ポインタは違う．
-      if (pointerOperand->isecc &&
-          pointerOperand->getType()->getNumContainedTypes() > 0 &&
-          pointerOperand->getType()->getContainedType(0)->isPointerTy()) {
-        // do nothing: int *ptr _ecc_ = &var;
-
-        // これが無いと死ぬ．たぶん，テスト用プログラムのプロトタイプ宣言と型が一
-        // 致していないから．ポインタとポインタのポインタ？
         return NULL;
       }
 
@@ -335,25 +339,26 @@ namespace {
         return pointerOperand;
       }
 
-      // 構造体メンバその1
-      if (GetElementPtrInst *gep_inst = dyn_cast<GetElementPtrInst>(pointerOperand)) {
-        errs() << "[struct member] ";
-        if (gep_inst->getPointerOperand()->isecc) {
-          return gep_inst->getPointerOperand();
-        }
-      }
+      // // @todo or pointer?
+      // // 構造体メンバその1
+      // if (GetElementPtrInst *gep_inst = dyn_cast<GetElementPtrInst>(pointerOperand)) {
+      //   errs() << "[struct member] ";
+      //   if (gep_inst->getPointerOperand()->isecc) {
+      //     return gep_inst->getPointerOperand();
+      //   }
+      // }
 
-      // 構造体メンバその2 （アドレスが固定の場合: 例.グローバル変数）
-      if (ConstantExpr *expr = dyn_cast<ConstantExpr>(pointerOperand)) {
-        errs() << "[struct member] ";
-        if (expr->getOpcode() == Instruction::GetElementPtr &&
-            expr->getNumOperands() > 0 &&
-            expr->getOperand(0)->isecc) {
-          return expr->getOperand(0);
-        } else {
-          errs() << "OP: " << expr->getOpcode() << "  INST: " << Instruction::GetElementPtr << "\n";
-        }
-      }
+      // // 構造体メンバその2 （アドレスが固定の場合: 例.グローバル変数）
+      // if (ConstantExpr *expr = dyn_cast<ConstantExpr>(pointerOperand)) {
+      //   errs() << "[struct member (constant)] ";
+      //   if (expr->getOpcode() == Instruction::GetElementPtr &&
+      //       expr->getNumOperands() > 0 &&
+      //       expr->getOperand(0)->isecc) {
+      //     return expr->getOperand(0);
+      //   } else {
+      //     errs() << "OP: " << expr->getOpcode() << "  INST: " << Instruction::GetElementPtr << "\n";
+      //   }
+      // }
 
       return NULL;
     }
@@ -378,6 +383,7 @@ namespace {
           Value *ecc = getEccProtectedOperand(store_insn->getPointerOperand());
           if (ecc) {
             errs() << "\n  Store instruction with ecc lvalue found [" << ecc << "].\n";
+            store_insn->print(errs()); errs() << "\n";
             insertStoreTest(I);
             // insertDupStoreInsn(I, 0x1000000000);
             // insertDupStoreInsn(I, 0x2000000000);
