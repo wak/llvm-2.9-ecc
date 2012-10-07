@@ -330,6 +330,10 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
     PM.add(createWakDuplicateInsnTestPass(getTargetLowering()));
 
   // wak
+  if (OptWakInsertEccPass || OptWakInsertEccStore || OptWakInsertEccLoad)
+    PM.add(createWakInsertEccPass(getTargetLowering()));
+
+  // wak
   if (OptWakHammingEccPass)
     PM.add(createWakHammingEccPass(getTargetLowering()));
 

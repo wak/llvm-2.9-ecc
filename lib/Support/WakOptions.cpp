@@ -45,6 +45,18 @@ cl::opt<bool>
 OptWakAddMachineFunctionPass("wak-add-MFP", cl::Hidden,
                              cl::desc("MachineFunctionPass WakEccCheckPassをパスに追加"));
 
+
+cl::opt<bool>
+OptWakInsertEccPass("wak-insert-ecc", cl::Hidden,
+                    cl::desc("ECC用の命令を追加する（IR実装: WakInsertEccPass）"));
+cl::opt<bool>
+OptWakInsertEccStore("wak-insert-ecc-store", cl::Hidden,
+                     cl::desc("[storeのみ]ECC用の命令を追加する（IR実装: WakInsertEccPass）"));
+cl::opt<bool>
+OptWakInsertEccLoad("wak-insert-ecc-load", cl::Hidden,
+                    cl::desc("[loadのみ]ECC用の命令を追加する（IR実装: WakInsertEccPass）"));
+
+
 cl::opt<bool>
 OptWakAddDuplicateInsnTestPass("wak-add-DIT", cl::Hidden,
                                cl::desc("ECC値複製用のを命令を挿入するパスを追加 (WakDuplicateInsnTestPass)"));
