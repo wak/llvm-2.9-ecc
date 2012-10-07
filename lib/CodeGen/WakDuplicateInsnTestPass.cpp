@@ -188,8 +188,19 @@ namespace {
     int countPointerWraps(const Type *type) {
       int count;
 
-      for (count = 0; type->isPointerTy(); count++)
+      errs() << "(count: ";
+      for (count = 0; type->isPointerTy(); count++) {
+        if (count != 0)
+          errs() << "->";
         type = type->getContainedType(0);
+        type->print(errs());
+        if (const ArrayType *aryTy = dyn_cast<ArrayType>(type)) {
+          type = aryTy->getContainedType(0);
+          errs() << "=";
+          type->print(errs());
+        }
+      }
+      errs() << ") ";
       return count;
     }
 
