@@ -33,6 +33,32 @@ namespace {
 
   private:
 
+    // uint64_t ecc_load_integer(void *app_addr, uint64_t nr_bits)
+    Function *getEccLoadFunction(void) {
+      LLVMContext &C = FUNC->getContext();
+      Function *func =
+        cast<Function>(FUNC->getParent()->
+                       getOrInsertFunction("ecc_load_integer",
+                                           IntegerType::getInt64Ty(C),
+                                           Type::getInt8PtrTy(C, 0),
+                                           IntegerType::getInt64Ty(C),
+                                           NULL));
+      return func;
+    }
+
+    // void ecc_update_ecc_data_bits(void *app_addr, uint64_t nr_bits)
+    Function *getEccUpdateEccDataBitsFunction(void) {
+      LLVMContext &C = FUNC->getContext();
+      Function *func =
+        cast<Function>(FUNC->getParent()->
+                       getOrInsertFunction("ecc_update_ecc_data_bits",
+                                           Type::getVoidTy(C),
+                                           Type::getInt8PtrTy(C, 0),
+                                           IntegerType::getInt64Ty(C),
+                                           NULL));
+      return func;
+    }
+
     unsigned int getPointerSizeInBits() const {
       switch (FUNC->getParent()->getPointerSize()) {
       case Module::Pointer32:
@@ -91,7 +117,7 @@ namespace {
 
       // ロード関数を取得
       // @todo 型によって関数を変える
-      Function *load_function = FUNC->getParent()->getFunction("ecc_load_integer");
+      Function *load_function = getEccLoadFunction();
       if (load_function == NULL)
         report_fatal_error("ECC load function not found (ecc_load_*)");
 
@@ -157,7 +183,7 @@ namespace {
       IRBuilder<true, ConstantFolder, IRBuilderDefaultInserter<true> > B(storeInst->getParent(), ++insn_iter);
 
       // 更新関数を取得
-      Function *update_bits_function = FUNC->getParent()->getFunction("ecc_update_ecc_data_bits");
+      Function *update_bits_function = getEccUpdateEccDataBitsFunction();
       if (update_bits_function == NULL)
         report_fatal_error("ECC update function not found (ecc_update_ecc_data_bits)");
 
@@ -259,7 +285,7 @@ namespace {
       int rootWraps       = countPointerWraps(currentValue->getType());
       assert(toWraps <= rootWraps);
 
-      errs() << "RL = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps;
+      errs() << "RL = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps << "\n";
 
       if (protectRefLevel < 0)
         return currentValue;
@@ -322,10 +348,9 @@ namespace {
       // pointerOperandは，アドレス操作されて取得されたものか？
       // （ポインタ・配列・構造体メンバ）
       if (isPointerOperation(pointerOperand)) {
-        if (Value *operand = checkPointerHasEccValue(pointerOperand)) {
-          errs() << "\n";
+        if (Value *operand = checkPointerHasEccValue(pointerOperand))
           return operand;
-        }
+        errs() << "\n";
         return NULL;
       }
 
@@ -376,7 +401,7 @@ namespace {
           if (doStore && storeInst) {
             Value *ecc = getEccProtectedOperand(storeInst->getPointerOperand());
             if (ecc) {
-              errs() << "\n  Store instruction with ecc lvalue found [" << ecc << "].\n";
+              errs() << "\x1b[1;36m  Store instruction with ecc lvalue found [" << ecc << "].\x1b[m\n";
               inserted_inst_count = insertUpdateEccDataInstruction(I);
               changed = true;
               errs() << "\n";
@@ -388,7 +413,7 @@ namespace {
           if (doLoad && loadInst) {
             Value *ecc = getEccProtectedOperand(loadInst->getPointerOperand());
             if (ecc) {
-              errs() << "\n  Load instruction with ecc found [" << ecc << "].\n";
+              errs() << "\x1b[1;36m  Load instruction with ecc found [" << ecc << "].\x1b[m\n";
               inserted_inst_count = insertLoadValueInstruction(I);
               changed = true;
               errs() << "\n";
