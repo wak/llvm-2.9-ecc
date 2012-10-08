@@ -1778,7 +1778,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   }
 
   // wak: 命令にECCがついている場合は，表示する
-  if (I.isecc)
+  if (OptEccIR && I.isecc)
     Out << "[ECC-" << &cast<Value>(I) << "]";
 
   // Print out the opcode...
