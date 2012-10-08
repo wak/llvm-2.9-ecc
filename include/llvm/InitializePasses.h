@@ -128,6 +128,7 @@ void initializeLiveIntervalsPass(PassRegistry&);
 // - wak -------------
 void initializeWakEccCheckPass(PassRegistry&);
 void initializeWakDuplicateInsnTestPass(PassRegistry&);
+void initializeWakInsertEccPass(PassRegistry&);
 void initializeWakHammingEccPass(PassRegistry&);
 // ---------------- wak
 void initializeLiveStacksPass(PassRegistry&);

@@ -21,6 +21,11 @@ namespace llvm {
   extern cl::opt<bool> OptWakAddDuplicateInsnTestPass;
   extern cl::opt<bool> OptWakAddX86DuplicateInsnTestPass;
   extern cl::opt<bool> OptWakHammingEccPass;
+
+  /* ECC挿入（IR実装） */
+  extern cl::opt<bool> OptWakInsertEccPass;
+  extern cl::opt<bool> OptWakInsertEccStore;
+  extern cl::opt<bool> OptWakInsertEccLoad;
 }
 
 #endif
