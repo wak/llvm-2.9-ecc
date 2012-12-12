@@ -41,7 +41,8 @@
 #include <cctype>
 #include <map>
 
-#include "llvm/WakOptions.h"
+#include "llvm/WakOptions.h"    // wak
+#include "llvm/Support/Wak.h"   // wak
 
 using namespace llvm;
 
@@ -1117,6 +1118,25 @@ static void WriteMDNodeBodyInternal(raw_ostream &Out, const MDNode *Node,
   Out << "}";
 }
 
+static void PrintEccInfo(raw_ostream &Out, const Value *V) {
+  if (!OptEccIR)
+    return;
+
+  if (V->isecc) {
+    if (OptWakColor)
+      Out << COLOR_GREEN_BEG;
+    Out << "[ECC(" << V->ecc_reference_level << ")-" << V << "]";
+    if (OptWakColor)
+      Out << COLOR_END;
+  }
+  if (V->eccComputeInfo) {
+    if (OptWakColor)
+      Out << COLOR_BLUE_BEG;
+    Out << "[ECC R(" << EccComputeInfo::getInfoName(V->eccComputeInfo) << ")]";
+    if (OptWakColor)
+      Out << COLOR_END;
+  }
+}
 
 /// WriteAsOperand - Write the name of the specified value out to the specified
 /// ostream.  This can be useful when you just want to print int %reg126, not
@@ -1126,9 +1146,7 @@ static void WriteAsOperandInternal(raw_ostream &Out, const Value *V,
                                    TypePrinting *TypePrinter,
                                    SlotTracker *Machine,
                                    const Module *Context) {
-  // wak
-  if (OptEccIR && V->isecc)
-    Out << "[ECC-" << V << "]";
+  PrintEccInfo(Out, V);         // wak
 
   if (V->hasName()) {
     PrintLLVMName(Out, V);
@@ -1778,8 +1796,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   }
 
   // wak: 命令にECCがついている場合は，表示する
-  if (OptEccIR && I.isecc)
-    Out << "[ECC-" << &cast<Value>(I) << "]";
+  PrintEccInfo(Out, &I);
 
   // Print out the opcode...
   Out << I.getOpcodeName();
@@ -2156,8 +2173,7 @@ void Value::print(raw_ostream &ROS, AssemblyAnnotationWriter *AAW) const {
     // Otherwise we don't know what it is. Call the virtual function to
     // allow a subclass to print itself.
     // wak: このパターンが出てきたときは，わかりやすいようにメッセージを出しておく
-    errs() << "wak: printCustom() called. See Value::print() !!\n";
-    OS << "[wak: printCustom() call ->]";
+    OS << "[-wak: printCustom() call-]";
     printCustom(OS);
   }
 }

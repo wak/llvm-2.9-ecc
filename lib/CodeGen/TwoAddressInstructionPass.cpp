@@ -47,6 +47,8 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/WakOptions.h"   // wak
+#include "llvm/Support/Wak.h"   // wak
 using namespace llvm;
 
 STATISTIC(NumTwoAddressInstrs, "Number of two-address instructions");
@@ -642,6 +644,13 @@ TwoAddressInstructionPass::ConvertInstTo3Addr(MachineBasicBlock::iterator &mi,
                                               unsigned RegA, unsigned RegB,
                                               unsigned Dist) {
   MachineInstr *NewMI = TII->convertToThreeAddress(mbbi, mi, LV);
+
+  if (mi->isEccRelated || mi->eccComputeInfo) {
+    NewMI->isEccRelated = true;
+    NewMI->eccComputeInfo = EccComputeInfo::ComputeEccRelatedTwoAddr;
+    NewMI->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+  }
+
   if (NewMI) {
     DEBUG(dbgs() << "2addr: CONVERTING 2-ADDR: " << *mi);
     DEBUG(dbgs() << "2addr:         TO 3-ADDR: " << *NewMI);
@@ -896,12 +905,16 @@ TryInstructionTransform(MachineBasicBlock::iterator &mi,
     }
   }
 
-  // If it's profitable to commute, try to do so.
-  if (TryCommute && CommuteInstruction(mi, mbbi, regB, regC, Dist)) {
-    ++NumCommuted;
-    if (AggressiveCommute)
-      ++NumAggrCommuted;
-    return false;
+  if (!OptWakRegAlloc) {        // wak
+    // wak: 状態が正しくない上に，複雑になるのでCommuteしない
+
+    // If it's profitable to commute, try to do so.
+    if (TryCommute && CommuteInstruction(mi, mbbi, regB, regC, Dist)) {
+      ++NumCommuted;
+      if (AggressiveCommute)
+        ++NumAggrCommuted;
+      return false;
+    }
   }
 
   if (TargetRegisterInfo::isVirtualRegister(regA))
@@ -1174,8 +1187,14 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &MF) {
             ReMatRegs.set(TargetRegisterInfo::virtReg2Index(regB));
             ++NumReMats;
           } else {
-            BuildMI(*mbbi, mi, mi->getDebugLoc(), TII->get(TargetOpcode::COPY),
-                    regA).addReg(regB);
+            MachineInstr *MI = BuildMI(*mbbi, mi, mi->getDebugLoc(), TII->get(TargetOpcode::COPY),
+                                       regA).addReg(regB);
+            // wak: 2アドレス命令のための変換
+            if (mi->isEccRelated || mi->eccComputeInfo) {
+              MI->isEccRelated = true;
+              MI->eccComputeInfo = EccComputeInfo::ComputeEccRelatedTwoAddr;
+              MI->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+            }
           }
 
           MachineBasicBlock::iterator prevMI = prior(mi);
@@ -1379,6 +1398,13 @@ TwoAddressInstructionPass::CoalesceExtSubRegs(SmallVector<unsigned,4> &Srcs,
       .addReg(DstReg, RegState::Define, NewDstSubIdx)
       .addReg(SrcReg, 0, NewSrcSubIdx);
 
+    // wak: 伝播
+    if (SomeMI->isEccRelated || SomeMI->eccComputeInfo) {
+      CopyMI->isEccRelated = true;
+      CopyMI->eccComputeInfo = SomeMI->eccComputeInfo;
+      CopyMI->setDbgWhereEccRelated(__FILE__, __LINE__);
+    }
+
     // Remove all the old extract instructions.
     for (MachineRegisterInfo::use_nodbg_iterator
            UI = MRI->use_nodbg_begin(SrcReg),
@@ -1495,6 +1521,13 @@ bool TwoAddressInstructionPass::EliminateRegSequences() {
         if (LV && isKill)
           LV->replaceKillInstruction(SrcReg, MI, CopyMI);
         DEBUG(dbgs() << "Inserted: " << *CopyMI);
+
+        // wak: 伝播
+        if (MI->isEccRelated || MI->eccComputeInfo) {
+          CopyMI->isEccRelated = true;
+          CopyMI->eccComputeInfo = MI->eccComputeInfo;
+          CopyMI->setDbgWhereEccRelated(__FILE__, __LINE__);
+        }
       }
     }
 

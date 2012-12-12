@@ -329,9 +329,9 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
   if (OptWakAddDuplicateInsnTestPass)
     PM.add(createWakDuplicateInsnTestPass(getTargetLowering()));
 
-  // wak
-  if (OptWakInsertEccPass || OptWakInsertEccStore || OptWakInsertEccLoad)
-    PM.add(createWakInsertEccPass(getTargetLowering()));
+  // wak: see: clang's BackendUtil.cpp:125
+  // if (OptWakInsertEccPass || OptWakInsertEccStore || OptWakInsertEccLoad)
+  //   PM.add(createWakInsertEccPass(getTargetLowering()));
 
   // wak
   if (OptWakHammingEccPass)
@@ -426,6 +426,7 @@ bool LLVMTargetMachine::addCommonCodeGenPasses(PassManagerBase &PM,
     printAndVerify(PM, "After PreRegAlloc passes");
 
   // Perform register allocation.
+  // wak: レジスタ割付けを行う
   PM.add(createRegisterAllocator(OptLevel));
   printAndVerify(PM, "After Register Allocation");
 

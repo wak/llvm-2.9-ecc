@@ -144,8 +144,11 @@ EmitCopyFromReg(SDNode *Node, unsigned ResNo, bool IsClone, bool IsCloned,
   } else {
     // Create the reg, emit the copy.
     VRBase = MRI->createVirtualRegister(DstRC);
-    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
-            VRBase).addReg(SrcReg);
+    MachineInstr *MI = BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
+                               VRBase).addReg(SrcReg);
+    MI->isEccRelated = Node->isEccRelated;     // wak: 伝播
+    MI->eccComputeInfo = Node->eccComputeInfo; // wak: 伝播
+    MI->setDbgWhereEccRelated(__FILE__, __LINE__, Node); // wak
   }
 
   SDValue Op(Node, ResNo);
@@ -287,6 +290,7 @@ InstrEmitter::AddRegisterOperand(MachineInstr *MI, SDValue Op,
            "Don't have operand info for this instruction!");
     if (DstRC && SrcRC != DstRC && !SrcRC->hasSuperClass(DstRC)) {
       unsigned NewVReg = MRI->createVirtualRegister(DstRC);
+      // wak: 伝播不要
       BuildMI(*MBB, InsertPos, Op.getNode()->getDebugLoc(),
               TII->get(TargetOpcode::COPY), NewVReg).addReg(VReg);
       VReg = NewVReg;
@@ -442,8 +446,11 @@ void InstrEmitter::EmitSubregNode(SDNode *Node,
       // r1026 = copy r1024
       const TargetRegisterClass *TRC = MRI->getRegClass(SrcReg);
       VRBase = MRI->createVirtualRegister(TRC);
-      BuildMI(*MBB, InsertPos, Node->getDebugLoc(),
-              TII->get(TargetOpcode::COPY), VRBase).addReg(SrcReg);
+      MachineInstr *MI = BuildMI(*MBB, InsertPos, Node->getDebugLoc(),
+                                 TII->get(TargetOpcode::COPY), VRBase).addReg(SrcReg);
+      MI->isEccRelated = Node->isEccRelated;     // wak: 伝播
+      MI->eccComputeInfo = Node->eccComputeInfo; // wak: 伝播
+      MI->setDbgWhereEccRelated(__FILE__, __LINE__, Node); // wak
     } else {
       const TargetRegisterClass *TRC = MRI->getRegClass(VReg);
       const TargetRegisterClass *SRC = TRC->getSubRegisterRegClass(SubIdx);
@@ -462,6 +469,10 @@ void InstrEmitter::EmitSubregNode(SDNode *Node,
       // Create the extract_subreg machine instruction.
       MachineInstr *MI = BuildMI(*MF, Node->getDebugLoc(),
                                  TII->get(TargetOpcode::COPY), VRBase);
+
+      MI->isEccRelated = Node->isEccRelated;     // wak: 伝播
+      MI->eccComputeInfo = Node->eccComputeInfo; // wak: 伝播
+      MI->setDbgWhereEccRelated(__FILE__, __LINE__, Node); // wak
 
       // Add source, and subreg index
       AddOperand(MI, Node->getOperand(0), 0, 0, VRBaseMap, /*IsDebug=*/false,
@@ -531,8 +542,10 @@ InstrEmitter::EmitCopyToRegClassNode(SDNode *Node,
   unsigned DstRCIdx = cast<ConstantSDNode>(Node->getOperand(1))->getZExtValue();
   const TargetRegisterClass *DstRC = TRI->getRegClass(DstRCIdx);
   unsigned NewVReg = MRI->createVirtualRegister(DstRC);
+
+  // wak: 伝播不要
   BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
-    NewVReg).addReg(VReg);
+          NewVReg).addReg(VReg);
 
   SDValue Op(Node, 0);
   bool isNew = VRBaseMap.insert(std::make_pair(Op, NewVReg)).second;
@@ -639,7 +652,8 @@ InstrEmitter::EmitDbgValue(SDDbgValue *SD,
 /// EmitMachineNode - Generate machine code for a target-specific node and
 /// needed dependencies.
 ///
-/// EmitMachineNode - ノードとノードが依存しているやつらのターゲット特有のマシンコード生成する．
+/// wak: EmitMachineNode - ノードとノードが依存しているやつらのターゲット特有のマシンコード生成する．
+/// wak: Node: 出力するSDNode
 void InstrEmitter::
 EmitMachineNode(SDNode *Node, bool IsClone, bool IsCloned,
                 DenseMap<SDValue, unsigned> &VRBaseMap) {
@@ -689,6 +703,11 @@ EmitMachineNode(SDNode *Node, bool IsClone, bool IsCloned,
   MachineInstr *MI = BuildMI(*MF, Node->getDebugLoc(), II);
   if (OptWakDebugAroundMBB)
     errs() << "wak: BuildMI [" << II.getName() << "]\n";
+
+  // wak: 情報伝播 DAG->MachienInstr（SDNode->MachineInstr）
+  MI->isEccRelated = Node->isEccRelated;     // wak: 伝播
+  MI->eccComputeInfo = Node->eccComputeInfo; // wak: 伝播
+  MI->setDbgWhereEccRelated(__FILE__, __LINE__, Node); // wak
 
   // The MachineInstr constructor adds implicit-def operands. Scan through
   // these to determine which are dead.
@@ -797,8 +816,12 @@ EmitSpecialNode(SDNode *Node, bool IsClone, bool IsCloned,
     if (SrcReg == DestReg) // Coalesced away the copy? Ignore.
       break;
 
-    BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
-            DestReg).addReg(SrcReg);
+    // wak: callの戻り値コピーは，これは関係なし？
+    MachineInstr *MI = BuildMI(*MBB, InsertPos, Node->getDebugLoc(), TII->get(TargetOpcode::COPY),
+                               DestReg).addReg(SrcReg);
+    MI->isEccRelated = Node->isEccRelated; // wak: 伝播
+    MI->eccComputeInfo = Node->eccComputeInfo;  // wak: 伝播
+    MI->setDbgWhereEccRelated(__FILE__, __LINE__, Node); // wak
     break;
   }
   case ISD::CopyFromReg: {

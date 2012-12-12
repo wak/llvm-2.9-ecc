@@ -1519,9 +1519,16 @@ X86TargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
       }
       Val = DAG.getNode(ISD::BITCAST, dl, CopyVT, Val);
     } else {
+      // wak: これは何？
       Chain = DAG.getCopyFromReg(Chain, dl, VA.getLocReg(),
                                  CopyVT, InFlag).getValue(1);
+      Chain.getNode()->isEccRelated = true; // wak
+      Chain.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+
+      // wak: Val.getNode()が，戻り値（EAX）を別のレジスタにコピーするノード
       Val = Chain.getValue(0);
+      Val.getNode()->isEccRelated = true; // wak
+      Val.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__);      // wak
     }
     InFlag = Chain.getValue(2);
     InVals.push_back(Val);
@@ -2118,6 +2125,10 @@ X86TargetLowering::LowerCall(SDValue Chain, SDValue Callee,
       Chain = DAG.getCopyToReg(Chain, dl, RegsToPass[i].first,
                                RegsToPass[i].second, InFlag);
       InFlag = Chain.getValue(1);
+
+      // wak: @todo: 下の方にも，似たようなのがある…
+      Chain.getNode()->isEccRelated = true; // wak
+      Chain.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
     }
 
   if (Subtarget->isPICStyleGOT()) {
@@ -2129,6 +2140,8 @@ X86TargetLowering::LowerCall(SDValue Chain, SDValue Callee,
                                            DebugLoc(), getPointerTy()),
                                InFlag);
       InFlag = Chain.getValue(1);
+      Chain.getNode()->isEccRelated = true; // wak
+      Chain.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
     } else {
       // If we are tail calling and generating PIC/GOT style code load the
       // address of the callee into ECX. The value in ecx is used as target of
@@ -2173,6 +2186,7 @@ X86TargetLowering::LowerCall(SDValue Chain, SDValue Callee,
 
 
   // For tail calls lower the arguments to the 'real' stack slot.
+  // wak: 末尾コールなので気にせず
   if (isTailCall) {
     // Force all the incoming stack arguments to be loaded from the stack
     // before any new outgoing arguments are stored to the stack, because the
@@ -2367,6 +2381,8 @@ X86TargetLowering::LowerCall(SDValue Chain, SDValue Callee,
 
   // Handle result values, copying them out of physregs into vregs that we
   // return.
+
+  // wak: LowerCallResult()の戻り値の.getValue(0)が，戻り値をレジスタにコピーするノード
   return LowerCallResult(Chain, InFlag, CallConv, isVarArg,
                          Ins, dl, DAG, InVals);
 }

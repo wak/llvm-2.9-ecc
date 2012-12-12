@@ -58,6 +58,8 @@ FunctionPass *llvm::createRegisterAllocator(CodeGenOpt::Level OptLevel) {
   if (Ctor != createDefaultRegisterAllocator)
     return Ctor();
 
+  // wak: [register] レジスタ割付けアルゴリズムはどれにするか？
+  // wak: 最適化OFFだと，FastRegisterAllocator
   // When the 'default' allocator is requested, pick one based on OptLevel.
   switch (OptLevel) {
   case CodeGenOpt::None:

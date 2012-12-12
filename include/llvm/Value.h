@@ -95,10 +95,13 @@ protected:
 
   Value(const Type *Ty, unsigned scid);
 public:
-  // wak
+  // wak: Initialized at lib/VMCore/Value.cpp L.48
   bool isecc;
   bool isecc_inserted;
   int ecc_reference_level;
+
+  bool isEccRelated;            // これはなくても実装できる？
+  unsigned eccComputeInfo;
 
   virtual ~Value();
 

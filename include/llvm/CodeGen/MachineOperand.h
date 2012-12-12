@@ -35,6 +35,9 @@ class MCSymbol;
 ///
 class MachineOperand {
 public:
+  // wak: 一旦spillされてreloadされた時に，同じレジスタを割り付けるために使う
+  unsigned wakForceAllocatedPhysReg;
+
   enum MachineOperandType {
     MO_Register,               ///< Register operand.
     MO_Immediate,              ///< Immediate operand
@@ -136,6 +139,7 @@ private:
   } Contents;
 
   explicit MachineOperand(MachineOperandType K) : OpKind(K), ParentMI(0) {
+    wakForceAllocatedPhysReg = 0; // wak
     TargetFlags = 0;
   }
 public:

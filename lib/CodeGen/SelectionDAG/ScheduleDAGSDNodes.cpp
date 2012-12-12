@@ -649,7 +649,7 @@ static void ProcessSourceNode(SDNode *N, SelectionDAG *DAG,
 
 
 /// EmitSchedule - Emit the machine code in scheduled order.
-//  EmitSchedule - スケジュールされたオーダーで，マシンコードを出力する
+//  wak: EmitSchedule - スケジュールされたオーダーで，マシンコードを出力する
 MachineBasicBlock *ScheduleDAGSDNodes::EmitSchedule() {
   InstrEmitter Emitter(BB, InsertPos);
   DenseMap<SDValue, unsigned> VRBaseMap;

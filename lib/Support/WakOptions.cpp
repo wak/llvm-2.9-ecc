@@ -3,8 +3,8 @@
 
 namespace llvm {
 cl::opt<bool>
-OptEccIR("wak-ecc-ir", cl::Hidden,
-         cl::desc("IR出力にECC情報を付ける"));
+OptEccIR("wak-print-ecc", cl::Hidden,
+         cl::desc("命令ダンプにECC情報を付ける"));
 
 
 cl::opt<bool>
@@ -69,4 +69,10 @@ OptWakAddX86DuplicateInsnTestPass("wak-add-DIT-MFP", cl::Hidden,
 cl::opt<bool>
 OptWakHammingEccPass("wak-add-hamming-FP", cl::Hidden,
                      cl::desc("MachineFunctionPass WakDuplicateTestPassをパスに追加"));
+
+
+cl::opt<bool> OptWakRegAlloc("wak-reg-alloc", cl::Hidden,cl::desc("レジスタ強制する"));
+
+cl::opt<bool> OptWakColor("wak-color", cl::Hidden,cl::desc("カラー表示する"));
+
 }

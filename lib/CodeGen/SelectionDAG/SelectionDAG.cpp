@@ -51,6 +51,9 @@
 #include "llvm/ADT/StringExtras.h"
 #include <algorithm>
 #include <cmath>
+
+#include "llvm/Support/Wak.h"
+
 using namespace llvm;
 
 /// makeVTList - Return an instance of the SDVTList struct initialized with the
@@ -6169,7 +6172,7 @@ void SDNode::print_details(raw_ostream &OS, const SelectionDAG *G) const {
   } else if (const MemSDNode* M = dyn_cast<MemSDNode>(this)) {
     OS << "<" << *M->getMemOperand() << ">";
     if (M->getSrcValue()->isecc)
-      OS << " <ECC>";                        // wak
+      OS << COLOR_RED(" <ECC>"); // wak
   } else if (const BlockAddressSDNode *BA =
                dyn_cast<BlockAddressSDNode>(this)) {
     OS << "<";

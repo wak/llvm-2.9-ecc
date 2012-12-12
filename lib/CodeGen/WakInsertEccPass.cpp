@@ -1,4 +1,5 @@
-#define DEBUG_TYPE "wak-duplicate-insn-test"
+#define DEBUG_TYPE "wak-insert-ecc"
+#include <sstream>
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/Attributes.h"
@@ -17,6 +18,7 @@
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/WakOptions.h"
+#include "llvm/Support/Wak.h"
 
 using namespace llvm;
 
@@ -32,6 +34,15 @@ namespace {
     }
 
   private:
+
+    void warning(StringRef message, const Instruction *I) {
+      errs() << "\x1b[1;31mECC";
+      if (I && !I->getDebugLoc().isUnknown()) {
+        const DebugLoc &Loc = I->getDebugLoc();
+        errs() << ":" << Loc.getLine() << ":" << Loc.getCol();
+      }
+      errs() << ": warning: " << message << "\x1b[m\n";
+    }
 
     // uint64_t ecc_load_integer(void *app_addr, uint64_t nr_bits)
     Function *getEccLoadFunction(void) {
@@ -59,6 +70,7 @@ namespace {
       return func;
     }
 
+    // ターゲットアーキテクチャのポインタのサイズを返す
     unsigned int getPointerSizeInBits() const {
       switch (FUNC->getParent()->getPointerSize()) {
       case Module::Pointer32:
@@ -93,6 +105,17 @@ namespace {
       return size;
     }
 
+    // 定義を遡ってeccComputeInfoを削除する
+    void clearEccComputeInfo(User *U) {
+      if (U == NULL)
+        return;
+      U->eccComputeInfo = EccComputeInfo::None;
+      for (unsigned i = 0; i < U->getNumOperands(); i++) {
+        Value *V = U->getOperand(i);
+        clearEccComputeInfo(dyn_cast<User>(V));
+      }
+    }
+
     // 普通のLOAD命令を，次の処理を行う関数への呼び出しに変更する
     //   (1) 保護されたメモリ領域から値を取得する
     //   (2) 取得した値に誤りがないか，誤り検出を行う
@@ -105,9 +128,9 @@ namespace {
     //     ELSE
     //       (6) どうするか判断を仰ぐ（ユーザ定義ハンドラの呼び出し）
     //
-    //   関数一覧
-    //     数値用（汎用）: uint64_t ecc_load_integer(void *app, uint64_t bits)
-    //     ポインタ用    : void *ecc_load_pointer(void *app, uint64_t bits) 数値用でも代用できるかも
+    // 関数一覧
+    //   数値用（汎用）: uint64_t ecc_load_integer(void *app, uint64_t bits)
+    //   ポインタ用    : void *ecc_load_pointer(void *app, uint64_t bits) 数値用でも代用できるかも
     int insertLoadValueInstruction(BasicBlock::iterator insn_iter) {
       int nr_inserted_instructions = 0;
       LoadInst *loadInst = dyn_cast<LoadInst>(insn_iter);
@@ -126,7 +149,7 @@ namespace {
 
       // ロード関数の呼出し命令を挿入
       //   load_function((void *) pointerOperand, target_size_in_bits);
-      Instruction *data = 
+      Instruction *loadFuncCall = 
         B.CreateCall2(load_function,
                       B.CreatePointerCast(loadInst->getPointerOperand(), B.getInt8PtrTy()),
                       B.getInt64(size));
@@ -134,15 +157,15 @@ namespace {
 
       // i1,i8,i16,i32,i64,i128,   f....
       // uint64_tを本来の型にキャスト
-      Value *cast = data;
+      Value *cast = loadFuncCall;
       if (dataType->isPointerTy()) {
-        cast = B.CreateIntToPtr(data, dataType);
+        cast = B.CreateIntToPtr(loadFuncCall, dataType);
         nr_inserted_instructions++;
       } else if (dataType->isIntegerTy()) {
         if (dataType->getPrimitiveSizeInBits() > 64)
           report_fatal_error("ECC load: over 64bit load not supported");
         else if (dataType->getPrimitiveSizeInBits() < 64) {
-          cast = B.CreateTrunc(data, dataType);
+          cast = B.CreateTrunc(loadFuncCall, dataType);
           nr_inserted_instructions++;
         }
       }
@@ -152,16 +175,16 @@ namespace {
         errs() << "  cast: orig=";
         dataType->print(errs());
         errs() << ", from=";
-        data->getType()->print(errs());
+        loadFuncCall->getType()->print(errs());
         errs() << ", to=";
         cast->getType()->print(errs());
         errs() << "\n  inserted: ";
-        data->print(errs());
+        loadFuncCall->print(errs());
         errs() << "\n";
       }
 
       // デバッガで停止できるようにする
-      data->setDebugLoc(loadInst->getDebugLoc());
+      loadFuncCall->setDebugLoc(loadInst->getDebugLoc());
 
       // このLOAD命令への挿入は，オペランドを保護すべきであるために行われた．した
       // がって，この戻り値を用いてポインタを辿る場合も，保護すべきである．
@@ -169,6 +192,12 @@ namespace {
       // @todo: 本当か？例外ケースは？
       cast->isecc = true;
       cast->ecc_reference_level = -1;
+
+      // @todo: [bug] 暗黙キャスト考慮しないと．例: c = a + (int) b;
+      cast->isEccRelated           = true;
+      cast->eccComputeInfo         = EccComputeInfo::ComputeEccRelated;
+      loadFuncCall->isEccRelated   = true;
+      loadFuncCall->eccComputeInfo = EccComputeInfo::LoadVariable;
 
       // 本来のLOADへのすべての参照を入れ替える
       loadInst->replaceAllUsesWith(cast);
@@ -225,9 +254,7 @@ namespace {
 
     // オペランド（ポインタが指す先）が保護されているかを調べる．
     // 保護されていれば，その定義点を返す．
-    Value *checkPointerHasEccValue(Value *pointerOperand) {
-      assert(isPointerOperation(pointerOperand, false));
-
+    Value *checkPointerHasEccValue(const Value *pointerOperand, bool level_check = true) {
       /*
        * [ポインタルール]
        *   ポインタ変数に_ecc_(level = 0)を指定した場合，
@@ -252,19 +279,21 @@ namespace {
        *   - 代入時アルゴリズムと同様
        */
 
-      // isPointerOperation()でポインタであることはチェックしてある
-      Value *currentValue = pointerOperand;
+      // 最初の定義点を探す．
+      // shouldUsePointerRule()でポインタであることはチェックしてある
+      const Value *currentValue = pointerOperand;
       while (true) {
         if (currentValue->isecc)
           break;
 
-        if (LoadInst *loadInst = dyn_cast<LoadInst>(currentValue)) {
+        if (const LoadInst *loadInst = dyn_cast<LoadInst>(currentValue)) {
           // ポインタを剥がす場合は，load命令が入る
           currentValue = loadInst->getPointerOperand();
-        } else if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(currentValue)) {
+        } else if (const GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(currentValue)) {
           // 配列の要素や構造体メンバを参照する場合は，GEP命令が入る
+          // ただのアドレス計算に使われているだけなので，基底ポインタを取得する
           currentValue = gepInst->getPointerOperand();
-        } else  if (ConstantExpr *expr = dyn_cast<ConstantExpr>(currentValue)) {
+        } else if (const ConstantExpr *expr = dyn_cast<ConstantExpr>(currentValue)) {
           if (expr->getOpcode() == Instruction::GetElementPtr &&
               expr->getNumOperands() > 0) {
             currentValue = expr->getOperand(0);
@@ -272,6 +301,11 @@ namespace {
             errs() << "[Unsupported ConstantExpr: " << expr->getOpcode()
                    << "  INST: " << Instruction::GetElementPtr << "]\n";
           }
+        } else if (const CastInst *castInst = dyn_cast<CastInst>(currentValue)) {
+          // @todo: 他のケースもあるはず．余計な影響を与えないかチェック
+          // char *p, **pp = &p;
+          //if (castInst->getDestTy()->isPointerTy())
+          currentValue = castInst->getOperand(0);
         } else {
           break;
         }
@@ -285,24 +319,40 @@ namespace {
       int rootWraps       = countPointerWraps(currentValue->getType());
       assert(toWraps <= rootWraps);
 
-      errs() << "RL = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps << "\n";
+      errs() << "RL = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps << " => ";
 
-      if (protectRefLevel < 0)
-        return currentValue;
+      if (!level_check) {
+        errs() << "protected (no level_check)\n";
+        return const_cast<Value *>(currentValue);
+      }
+
+      if (protectRefLevel < 0) {
+        errs() << "protected\n";
+        return const_cast<Value *>(currentValue);
+      }
 
       // StoreのpointerOperandは，変更したいアドレスへのポインタなので，
       // 一つポインタが多く被さっている．そのため，+1が必要．
-      if (toWraps <= protectRefLevel + 1)
-        return currentValue;
+      if (toWraps <= protectRefLevel + 1) {
+        errs() << "protected\n";
+        return const_cast<Value *>(currentValue);
+      }
 
+      errs() << "not-protected\n";
       return NULL;
     }
 
-    bool isPointerOperation(Value *pointerOperand, bool debug = true) {
+    // 引数: pointerOperand: loadまたはstore命令のオペランド
+    // 戻り値: 操作対象は，ポインタルールを適用すべきか？
+    bool shouldUsePointerRule(Value *pointerOperand, bool debug = true) {
       const Type *destTy = pointerOperand->getType();
 
       // store,loadのオペランドはポインタのはず
       assert(destTy->isPointerTy() && "operand must pointer");
+
+
+      if (CastInst *castInst = dyn_cast<CastInst>(pointerOperand))
+        return shouldUsePointerRule(castInst->getOperand(0));
 
       // 間にload命令が挟まっている場合は，ポインタを剥がして代入するケース
       if (dyn_cast<LoadInst>(pointerOperand)) {
@@ -334,8 +384,9 @@ namespace {
       if (const PointerType *ptrTy = dyn_cast<PointerType>(destTy)) {
         if (!ptrTy->getContainedType(0)->isPointerTy()) {
           // loadが挟まっておらず，ポインタを一つ剥がしたものがポインタでなければ，
-          // 実体を更新するケース．
-          //   例: int i; i = value;
+          // 実体を更新または取得するケース．
+          //   例: int ecc; ecc = value;
+          //   例: int ecc; to = ecc;
           return false;
         }
       }
@@ -344,17 +395,19 @@ namespace {
       return true;
     }
 
+    // 操作するオペランドを保護すべきかどうか，判定する
+    // Return: 保護必要->定義点, 保護不要->NULL
     Value *getEccProtectedOperand(Value *pointerOperand) {
       // pointerOperandは，アドレス操作されて取得されたものか？
       // （ポインタ・配列・構造体メンバ）
-      if (isPointerOperation(pointerOperand)) {
+      if (shouldUsePointerRule(pointerOperand)) {
         if (Value *operand = checkPointerHasEccValue(pointerOperand))
           return operand;
         errs() << "\n";
         return NULL;
       }
 
-      // 変数アクセス
+      // 非ポインタ変数アクセス
       if (pointerOperand->isecc) {
         errs() << "  [var] ";
         errs() << "\n";
@@ -364,10 +417,105 @@ namespace {
       return NULL;
     }
 
+    // ポインタの定義レベルで，ECC型の変換が安全かを確認する
+    void checkChangeEccPointerDefinition(const Value *from, const Value *to, const Instruction *inst) {
+      if (from == NULL)
+        return;
+      if (to && to->ecc_reference_level == -1)
+        return;
+
+      if (to == NULL)
+        // 左辺値に保護情報がない
+        warning("change ecc pointer to non-ecc pointer", inst);
+      else if (to->ecc_reference_level < from->ecc_reference_level) {
+        // ECC保護レベルが足りない
+        std::stringstream message;
+        message << "change ecc pointer to lack-reference level pointer (lv.";
+        message << from->ecc_reference_level;
+        message << " -> lv.";
+        message << to->ecc_reference_level;
+        message << ")";
+        warning(message.str(), inst);
+      }
+    }
+
+    // 警告: non-ECCポインタへECCポインタを代入する
+    void checkAssignEccPointerToNonEccPointer(const StoreInst *storeInst) {
+      if (!storeInst->getPointerOperand()->getType()->getContainedType(0)->isPointerTy())
+        return;
+      if (!storeInst->getValueOperand()->getType()->isPointerTy())
+        return;
+
+      errs() << "\x1b[1;33m  check warn: \x1b[m\n";
+
+      const Value *lValue = checkPointerHasEccValue(storeInst->getPointerOperand(), false);
+      const Value *rValue = checkPointerHasEccValue(storeInst->getValueOperand(), false);
+
+      checkChangeEccPointerDefinition(rValue, lValue, storeInst);
+    }
+
+    void fixEccComputeInfo(Function &F) {
+      for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
+        // 各ブロックを処理する
+        for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; I++) {
+          // 各命令を処理する
+          Instruction *Inst = I;
+          bool allOperandsAreEccRelated = true;
+
+          if (Inst->eccComputeInfo)
+            continue;
+
+          // Store命令で，代入する値がECC値であれば，ECC計算関連の終わり
+          if (StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
+            if (SI->getValueOperand()->eccComputeInfo) {
+              Inst->isEccRelated   = true;
+              Inst->eccComputeInfo = EccComputeInfo::ComputeEccRelatedEnd;
+              continue;
+            }
+          }
+
+          for (unsigned i = 0; i < Inst->getNumOperands(); i++) {
+            Value *V = Inst->getOperand(i);
+            if (!V->eccComputeInfo) { // 何かしらECC関連の処理がなければ
+              allOperandsAreEccRelated = false;
+              break;
+            }
+          }
+
+          if (!allOperandsAreEccRelated) {
+            errs() << "wak: [debug] clear ComputeEccRelated of ";
+            Inst->dump();
+            clearEccComputeInfo(Inst);
+            continue;
+          }
+
+          if (dyn_cast<ReturnInst>(Inst)) {
+            // Return命令の場合は，そこで計算が終わり．
+            Inst->isEccRelated   = true;
+            Inst->eccComputeInfo = EccComputeInfo::ComputeEccRelatedEnd;
+          } else if (dyn_cast<StoreInst>(Inst)) {
+            // Store命令の場合は，そこで計算が終わり．
+            Inst->isEccRelated   = true;
+            Inst->eccComputeInfo = EccComputeInfo::ComputeEccRelatedEnd;
+          } else {
+            // すべてのオペランドがECC計算関連なので，この命令も計算に含める
+            errs() << "wak: [debug] attach ComputeEccRelated to ";
+            Inst->dump();
+            Inst->isEccRelated   = true;
+            Inst->eccComputeInfo = EccComputeInfo::ComputeEccRelated;
+          }
+        }
+      }
+    }
+
     bool insertInstructions(Function &F) {
-      bool both = (!OptWakInsertEccStore && !OptWakInsertEccLoad);
-      bool doStore = (both || OptWakInsertEccStore);
-      bool doLoad = (both || OptWakInsertEccLoad);
+      bool doStore = (OptWakInsertEccPass || OptWakInsertEccStore);
+      bool doLoad  = (OptWakInsertEccPass || OptWakInsertEccLoad);
+
+      errs() << "Wak Insert ECC Pass Configuration";
+      errs() << "\n  store: " << doStore;
+      errs() << "\n  load : " << doLoad;
+      errs() << "\n\n";
 
       bool changed = false;
       int inserted_inst_count = 0;
@@ -399,21 +547,23 @@ namespace {
           // 代入時に複製を作る
           StoreInst *storeInst = dyn_cast<StoreInst>(I);
           if (doStore && storeInst) {
-            Value *ecc = getEccProtectedOperand(storeInst->getPointerOperand());
-            if (ecc) {
-              errs() << "\x1b[1;36m  Store instruction with ecc lvalue found [" << ecc << "].\x1b[m\n";
+            Value *shouldProtect = getEccProtectedOperand(storeInst->getPointerOperand());
+            if (shouldProtect) {
+              errs() << "\x1b[1;36m  Store instruction with ecc lvalue found [" << shouldProtect << "].\x1b[m\n";
               inserted_inst_count = insertUpdateEccDataInstruction(I);
               changed = true;
               errs() << "\n";
             }
+
+            checkAssignEccPointerToNonEccPointer(storeInst);
           }
 
           // 参照時に複製を作る
           LoadInst *loadInst = dyn_cast<LoadInst>(I);
           if (doLoad && loadInst) {
-            Value *ecc = getEccProtectedOperand(loadInst->getPointerOperand());
-            if (ecc) {
-              errs() << "\x1b[1;36m  Load instruction with ecc found [" << ecc << "].\x1b[m\n";
+            Value *shouldProtect = getEccProtectedOperand(loadInst->getPointerOperand());
+            if (shouldProtect) {
+              errs() << "\x1b[1;36m  Load instruction with ecc found [" << shouldProtect << "].\x1b[m\n";
               inserted_inst_count = insertLoadValueInstruction(I);
               changed = true;
               errs() << "\n";
@@ -435,7 +585,10 @@ namespace {
       errs().write_escaped(F.getName());
       errs() << "\n\n";
 
-      insertInstructions(F);
+      changed = insertInstructions(F);
+      if (changed) {
+        fixEccComputeInfo(F);
+      }
 
       errs() << "\n-------------------- [wak] --------------------\n\n";
       return changed;

@@ -24,6 +24,8 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/Support/DebugLoc.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h" // wak
+
 #include <vector>
 
 namespace llvm {
@@ -56,6 +58,27 @@ public:
     FrameSetup = 1 << 0                 // Instruction is used as a part of
                                         // function frame setup code.
   };
+
+  bool isEccRelated;                  // wak
+  unsigned eccComputeInfo;            // wak
+
+  const char *dbgWhereEccRelatedFile;       // wak
+  unsigned    dbgWhereEccRelatedLineNo;     // wak
+  const char *dbgWhereEccRelatedFileFrom;   // wak
+  unsigned    dbgWhereEccRelatedLineNoFrom; // wak
+
+  void setDbgWhereEccRelated(const char *file, unsigned lineno, const SDNode *Node = NULL) {
+    dbgWhereEccRelatedFile   = file;
+    dbgWhereEccRelatedLineNo = lineno;
+    if (Node) {
+      dbgWhereEccRelatedFileFrom   = Node->dbgWhereEccRelatedFile;
+      dbgWhereEccRelatedLineNoFrom = Node->dbgWhereEccRelatedLineNo;
+    } else {
+      dbgWhereEccRelatedFileFrom   = "?";
+      dbgWhereEccRelatedLineNoFrom = 0;
+    }
+  }
+
 private:
   const TargetInstrDesc *TID;           // Instruction descriptor.
   uint16_t NumImplicitOps;              // Number of implicit operands (which

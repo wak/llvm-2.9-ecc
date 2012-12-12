@@ -37,6 +37,10 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ADT/FoldingSet.h"
+
+#include "llvm/WakOptions.h"    // wak
+#include "llvm/Support/Wak.h"   // wak
+
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
@@ -451,7 +455,8 @@ raw_ostream &llvm::operator<<(raw_ostream &OS, const MachineMemOperand &MMO) {
 /// MachineInstr ctor - This constructor creates a dummy MachineInstr with
 /// TID NULL and no operands.
 MachineInstr::MachineInstr()
-  : TID(0), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0),
+  : isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?"),
+    TID(0), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0), // wak
     MemRefs(0), MemRefsEnd(0),
     Parent(0) {
   // Make sure that we get added to a machine basicblock
@@ -471,7 +476,8 @@ void MachineInstr::addImplicitDefUseOperands() {
 /// implicit operands. It reserves space for the number of operands specified by
 /// the TargetInstrDesc.
 MachineInstr::MachineInstr(const TargetInstrDesc &tid, bool NoImp)
-  : TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0),
+  : isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?"),
+    TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0), // wak
     MemRefs(0), MemRefsEnd(0), Parent(0) {
   if (!NoImp)
     NumImplicitOps = TID->getNumImplicitDefs() + TID->getNumImplicitUses();
@@ -485,7 +491,8 @@ MachineInstr::MachineInstr(const TargetInstrDesc &tid, bool NoImp)
 /// MachineInstr ctor - As above, but with a DebugLoc.
 MachineInstr::MachineInstr(const TargetInstrDesc &tid, const DebugLoc dl,
                            bool NoImp)
-  : TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0),
+  : isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?"),
+    TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0), // wak
     MemRefs(0), MemRefsEnd(0), Parent(0), debugLoc(dl) {
   if (!NoImp)
     NumImplicitOps = TID->getNumImplicitDefs() + TID->getNumImplicitUses();
@@ -500,7 +507,8 @@ MachineInstr::MachineInstr(const TargetInstrDesc &tid, const DebugLoc dl,
 /// that the MachineInstr is created and added to the end of the specified 
 /// basic block.
 MachineInstr::MachineInstr(MachineBasicBlock *MBB, const TargetInstrDesc &tid)
-  : TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0),
+  : isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?"),
+    TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0), // wak
     MemRefs(0), MemRefsEnd(0), Parent(0) {
   assert(MBB && "Cannot use inserting ctor with null basic block!");
   NumImplicitOps = TID->getNumImplicitDefs() + TID->getNumImplicitUses();
@@ -515,7 +523,8 @@ MachineInstr::MachineInstr(MachineBasicBlock *MBB, const TargetInstrDesc &tid)
 ///
 MachineInstr::MachineInstr(MachineBasicBlock *MBB, const DebugLoc dl,
                            const TargetInstrDesc &tid)
-  : TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0),
+  : isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?"),
+    TID(&tid), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0), // wak
     MemRefs(0), MemRefsEnd(0), Parent(0), debugLoc(dl) {
   assert(MBB && "Cannot use inserting ctor with null basic block!");
   NumImplicitOps = TID->getNumImplicitDefs() + TID->getNumImplicitUses();
@@ -529,7 +538,8 @@ MachineInstr::MachineInstr(MachineBasicBlock *MBB, const DebugLoc dl,
 /// MachineInstr ctor - Copies MachineInstr arg exactly
 ///
 MachineInstr::MachineInstr(MachineFunction &MF, const MachineInstr &MI)
-  : TID(&MI.getDesc()), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0),
+  : isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?"),
+    TID(&MI.getDesc()), NumImplicitOps(0), Flags(0), AsmPrinterFlags(0), // wak
     MemRefs(MI.MemRefs), MemRefsEnd(MI.MemRefsEnd),
     Parent(0), debugLoc(MI.getDebugLoc()) {
   Operands.reserve(MI.getNumOperands());
@@ -982,8 +992,12 @@ isRegTiedToUseOperand(unsigned DefOpIdx, unsigned *UseOpIdx) const {
 /// isRegTiedToDefOperand - Return true if the operand of the specified index
 /// is a register use and it is tied to an def operand. It also returns the def
 /// operand index by reference.
+/// wak: 指定された使用点のオペランドが，定義点オペランドと同じレジスタを使わないといけないか？
 bool MachineInstr::
 isRegTiedToDefOperand(unsigned UseOpIdx, unsigned *DefOpIdx) const {
+  if (isEccRelated) {           // wak
+    // ここは修正しても意味がないかなぁ？
+  }
   if (isInlineAsm()) {
     const MachineOperand &MO = getOperand(UseOpIdx);
     if (!MO.isReg() || !MO.isUse() || MO.getReg() == 0)
@@ -1307,6 +1321,18 @@ static void printDebugLoc(DebugLoc DL, const MachineFunction *MF,
 }
 
 void MachineInstr::print(raw_ostream &OS, const TargetMachine *TM) const {
+  if (OptEccIR) {
+    if (isEccRelated || eccComputeInfo) {
+      if (OptWakColor)
+        OS << (eccComputeInfo ? COLOR_RED_BEG : COLOR_CYAN_BEG);
+      OS << "[ECC R(" << EccComputeInfo::getInfoName(eccComputeInfo) << ")] ";
+      if (OptWakColor)
+        OS << COLOR_END;
+    } else {
+      OS << "        ";
+    }
+  }
+
   // We can be a bit tidier if we know the TargetMachine and/or MachineFunction.
   const MachineFunction *MF = 0;
   const MachineRegisterInfo *MRI = 0;
@@ -1338,7 +1364,17 @@ void MachineInstr::print(raw_ostream &OS, const TargetMachine *TM) const {
     OS << " = ";
 
   // Print the opcode name.
-  OS << getDesc().getName();
+  // wak: colored
+  if (OptWakColor) {
+    // X86::CALL32m = 308
+    // X86::CALLpcrel32 = 314
+    if (308 <= getDesc().getOpcode() && getDesc().getOpcode() <= 314)
+      OS << COLOR_GREEN_BEG;
+    else
+      OS << COLOR_MAGENTA_BEG;
+    OS << getDesc().getName() << COLOR_END;
+  } else
+    OS << getDesc().getName();
 
   // Print the rest of the operands.
   bool OmittedAnyCallClobbers = false;
@@ -1466,6 +1502,15 @@ void MachineInstr::print(raw_ostream &OS, const TargetMachine *TM) const {
     printDebugLoc(debugLoc, MF, OS);
   }
 
+  if (OptEccIR && (isEccRelated || eccComputeInfo)) {
+    if (OptWakColor)
+      OS << COLOR_YELLOW_R_BEG;
+    OS << " ## ECC related at "
+       << dbgWhereEccRelatedFile << ":" << dbgWhereEccRelatedLineNo
+       << " <= " << dbgWhereEccRelatedFileFrom << ":" << dbgWhereEccRelatedLineNoFrom;
+    if (OptWakColor)
+      OS << COLOR_END;
+  }
   OS << '\n';
 }
 

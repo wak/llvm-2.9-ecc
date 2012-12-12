@@ -355,8 +355,18 @@ public:
   //  Accessors
   //
 
-  // wak
-  virtual const char *getClassName() const { return "SDNode"; }
+  // wak: 下の方のコンストラクタで初期化している
+  bool isEccRelated;                  // wak
+  unsigned eccComputeInfo;            // wak
+
+  const char *dbgWhereEccRelatedFile; // wak
+  unsigned dbgWhereEccRelatedLineNo;  // wak
+  void setDbgWhereEccRelated(const char *file, unsigned lineno) {
+    dbgWhereEccRelatedFile   = file;
+    dbgWhereEccRelatedLineNo = lineno;
+  }
+
+  virtual const char *getClassName() const { return "SDNode"; } // wak
 
   /// getOpcode - Return the SelectionDAG opcode value for this node. For
   /// pre-isel nodes (those for which isMachineOpcode returns false), these
@@ -670,7 +680,8 @@ protected:
       OperandList(NumOps ? new SDUse[NumOps] : 0),
       ValueList(VTs.VTs), UseList(NULL),
       NumOperands(NumOps), NumValues(VTs.NumVTs),
-      debugLoc(dl) {
+      debugLoc(dl),
+      isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?") /* wak */ {
     for (unsigned i = 0; i != NumOps; ++i) {
       OperandList[i].setUser(this);
       OperandList[i].setInitial(Ops[i]);
@@ -684,7 +695,8 @@ protected:
     : NodeType(Opc), OperandsNeedDelete(false), HasDebugValue(false),
       SubclassData(0), NodeId(-1), OperandList(0), ValueList(VTs.VTs),
       UseList(NULL), NumOperands(0), NumValues(VTs.NumVTs),
-      debugLoc(dl) {}
+      debugLoc(dl),
+      isEccRelated(false), eccComputeInfo(0), dbgWhereEccRelatedFile("?") /* wak */  {}
 
   /// InitOperands - Initialize the operands list of this with 1 operand.
   void InitOperands(SDUse *Ops, const SDValue &Op0) {

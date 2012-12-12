@@ -59,6 +59,7 @@
 #include <algorithm>
 
 #include "llvm/WakOptions.h"
+#include "llvm/Support/Wak.h"
 
 using namespace llvm;
 
@@ -1132,6 +1133,7 @@ void SelectionDAGBuilder::visitRet(const ReturnInst &I) {
     unsigned NumValues = ValueVTs.size();
     if (NumValues) {
       SDValue RetOp = getValue(I.getOperand(0));
+
       for (unsigned j = 0, f = NumValues; j != f; ++j) {
         EVT VT = ValueVTs[j];
 
@@ -1185,6 +1187,23 @@ void SelectionDAGBuilder::visitRet(const ReturnInst &I) {
     DAG.getMachineFunction().getFunction()->getCallingConv();
   Chain = TLI.LowerReturn(Chain, CallConv, isVarArg,
                           Outs, OutVals, getCurDebugLoc(), DAG);
+
+  // wak: リターン命令にあれをつける
+  // wak: Chain.getNode()は，まさにX86::RETに変換される．
+  if (I.isEccRelated || I.eccComputeInfo) {
+    Chain.getNode()->isEccRelated = I.isEccRelated;
+    Chain.getNode()->eccComputeInfo = I.eccComputeInfo;
+    Chain.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__);
+
+    for (unsigned IOP = 0; IOP < Chain.getNode()->getNumOperands(); IOP++) {
+      SDNode *prepareNode = Chain.getNode()->getOperand(IOP).getNode();
+      errs() << "wak: [debug] attach ecc related to return prepares: ";
+      prepareNode->dump();
+      prepareNode->isEccRelated = I.isEccRelated;
+      prepareNode->eccComputeInfo = EccComputeInfo::ComputeEccRelated;
+      prepareNode->setDbgWhereEccRelated(__FILE__, __LINE__);
+    }
+  }
 
   // Verify that the target's LowerReturn behaved as expected.
   assert(Chain.getNode() && Chain.getValueType() == MVT::Other &&
@@ -2413,10 +2432,18 @@ void SelectionDAGBuilder::visitFSub(const User &I) {
 }
 
 void SelectionDAGBuilder::visitBinary(const User &I, unsigned OpCode) {
+  errs() << "wak: (code reading) visitBinary(I, " << ISD::ADD << ")\n";
+  I.dump();
+
   SDValue Op1 = getValue(I.getOperand(0));
   SDValue Op2 = getValue(I.getOperand(1));
-  setValue(&I, DAG.getNode(OpCode, getCurDebugLoc(),
-                           Op1.getValueType(), Op1, Op2));
+  SDValue Node = DAG.getNode(OpCode, getCurDebugLoc(), Op1.getValueType(), Op1, Op2);
+
+  //Node.getNode()->isEccRelated = true;    // wak: とりあえず全部印しをつけてみる
+  Node.getNode()->isEccRelated = I.isEccRelated; // wak: 伝播
+  Node.getNode()->eccComputeInfo = I.eccComputeInfo; // wak: 伝播
+  Node.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+  setValue(&I, Node);
 }
 
 void SelectionDAGBuilder::visitShift(const User &I, unsigned Opcode) {
@@ -2507,7 +2534,16 @@ void SelectionDAGBuilder::visitTrunc(const User &I) {
   // TruncInst cannot be a no-op cast because sizeof(src) > sizeof(dest).
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = TLI.getValueType(I.getType());
-  setValue(&I, DAG.getNode(ISD::TRUNCATE, getCurDebugLoc(), DestVT, N));
+  SDValue Node = DAG.getNode(ISD::TRUNCATE, getCurDebugLoc(), DestVT, N);
+  // wak: 付けた覚えはないが，trunc命令にiseccが付いていたので，利用する
+  //      あとで調べる．
+  if (I.isEccRelated) {
+    Node.getNode()->isEccRelated = true;
+    Node.getNode()->eccComputeInfo = I.eccComputeInfo; // wak: 伝播
+    Node.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+  }
+
+  setValue(&I, Node);
 }
 
 void SelectionDAGBuilder::visitZExt(const User &I) {
@@ -3126,11 +3162,25 @@ void SelectionDAGBuilder::visitStore(const StoreInst &I) {
                               SDValue(Src.getNode(), Src.getResNo() + i),
                               Add, MachinePointerInfo(PtrV, Offsets[i]),
                               isVolatile, isNonTemporal, Alignment, TBAAInfo);
+
+    if (I.isEccRelated) {       // wak?
+      St.getNode()->isEccRelated = true;
+      St.getNode()->eccComputeInfo = I.eccComputeInfo; // wak: 伝播
+      St.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+    }
+
     Chains[ChainI] = St;
   }
 
   SDValue StoreNode = DAG.getNode(ISD::TokenFactor, getCurDebugLoc(),
                                   MVT::Other, &Chains[0], ChainI);
+
+  if (I.isEccRelated) {         // wak?
+    StoreNode.getNode()->isEccRelated = true;
+    StoreNode.getNode()->eccComputeInfo = I.eccComputeInfo; // wak: 伝播
+    StoreNode.getNode()->setDbgWhereEccRelated(__FILE__, __LINE__); // wak
+  }
+
   ++SDNodeOrder;
   AssignOrderingToNode(StoreNode.getNode());
   DAG.setRoot(StoreNode);
@@ -4899,6 +4949,16 @@ void SelectionDAGBuilder::LowerCallTo(ImmutableCallSite CS, SDValue Callee,
                     isTailCall,
                     !CS.getInstruction()->use_empty(),
                     Callee, Args, DAG, getCurDebugLoc());
+
+  // wak: ここで，Result.second.getValue(0);が，戻り値を別の所にコピーするノード
+  if (const CallInst *CI = dyn_cast<CallInst>(CS.getInstruction())) {
+    SDNode *Node = Result.second.getValue(0).getNode();
+    if (Node->isEccRelated) {
+      Node->eccComputeInfo = CI->eccComputeInfo;
+      Node->setDbgWhereEccRelated(__FILE__, __LINE__);
+    }
+  }
+
   assert((isTailCall || Result.second.getNode()) &&
          "Non-null chain expected with non-tail call!");
   assert((Result.second.getNode() || !Result.first.getNode()) &&
@@ -4954,6 +5014,7 @@ void SelectionDAGBuilder::LowerCallTo(ImmutableCallSite CS, SDValue Callee,
       CurReg += NumRegs;
     }
 
+    // wak: 戻り値copy，ここだめ
     setValue(CS.getInstruction(),
              DAG.getNode(ISD::MERGE_VALUES, getCurDebugLoc(),
                          DAG.getVTList(&RetTys[0], RetTys.size()),
@@ -6155,6 +6216,7 @@ TargetLowering::LowerCallTo(SDValue Chain, const Type *RetTy,
   SmallVector<SDValue, 4> InVals;
   Chain = LowerCall(Chain, Callee, CallConv, isVarArg, isTailCall,
                     Outs, OutVals, Ins, dl, DAG, InVals);
+  // wak: ここで，Chainが戻り値をどこぞにコピーするやつ．特に，Chain.getValue(0)はまさにそれ．かも
 
   // Verify that the target's LowerCall behaved as expected.
   assert(Chain.getNode() && Chain.getValueType() == MVT::Other &&

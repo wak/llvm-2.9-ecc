@@ -2012,6 +2012,13 @@ void X86InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     }
   }
 
+  // wak: レジスタ強制の都合上，同じレジスタにコピーする場合があるから，その場合はなにもしない．
+  // wak: とても悲しい実装．
+  if ((X86::R15 <= DestReg && DestReg <= X86::R15W) &&
+      (X86::R15 <= SrcReg && SrcReg <= X86::R15W)) {
+    return;
+  }
+
   DEBUG(dbgs() << "Cannot copy " << RI.getName(SrcReg)
                << " to " << RI.getName(DestReg) << '\n');
   llvm_unreachable("Cannot emit physreg copy instruction");

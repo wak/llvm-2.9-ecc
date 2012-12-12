@@ -26,6 +26,12 @@ namespace llvm {
   extern cl::opt<bool> OptWakInsertEccPass;
   extern cl::opt<bool> OptWakInsertEccStore;
   extern cl::opt<bool> OptWakInsertEccLoad;
+
+  /* レジスタ強制 */
+  extern cl::opt<bool> OptWakRegAlloc;
+
+  /* 開発補助 */
+  extern cl::opt<bool> OptWakColor;
 }
 
 #endif

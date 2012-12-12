@@ -314,9 +314,10 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
 
   SplitCriticalSideEffectEdges(const_cast<Function&>(Fn), this);
 
-  CurDAG->init(*MF);
-  FuncInfo->set(Fn, *MF);       // wak: ここで，dumpのFrame Objects:がつくられている
-  SDB->init(GFI, *AA);
+  CurDAG->init(*MF);            // wak: SelectionDAG（メンバ変数初期化だけ）
+  FuncInfo->set(Fn, *MF);       // wak: FunctionLoweringInfo. ここで，dumpのFrame Objects:がつくられている
+  // wak: GFI: GCFunctionInfo Garbage collection関連っぽい
+  SDB->init(GFI, *AA);          // wak: SelectionDAGBuilder
 
   dumpMF(MF, "Before SelectAllBasicBlocks()");
   // wak: この時点では，命令の選択は行われていない．（dumpMFの出力的に）
@@ -460,6 +461,8 @@ SelectionDAGISel::SelectBasicBlock(BasicBlock::const_iterator Begin,
   // Lower all of the non-terminator instructions. If a call is emitted
   // as a tail call, cease emitting nodes for this block. Terminators
   // are handled below.
+  // 
+  // wak: Selection DAG 作成？
   for (BasicBlock::const_iterator I = Begin; I != End && !SDB->HasTailCall; ++I) {
     SDB->visit(*I);             // wak: SelectionDAGBuilder#visit
   }
@@ -935,9 +938,10 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
 
     // wak: [removed] FastISで命令選択
 
-    if (Begin != BI)
+    if (Begin != BI) {
       ++NumDAGBlocks;           // wak: まだ残りがある
-    else
+      errs() << "wak: error: FastIsel may worked ?\n";
+    } else
       ++NumFastIselBlocks;      // wak: すべてFastIselでできた？
 
     // Run SelectionDAG instruction selection on the remainder of the block
@@ -945,7 +949,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
     // block.
     bool HadTailCall;
     // wak: SelectBasicBlock(LLVMBB->getFirstNonPHI(), LLVMBB->end(), HadTailCall) と等価
-    SelectBasicBlock(Begin, BI, HadTailCall);
+    SelectBasicBlock(Begin, BI, HadTailCall); // wak: Selection DAG作成
     dumpMF(MF, "SelectAllBasicBlocks after SelectBasicBlock");
 
     FinishBasicBlock();
@@ -1990,6 +1994,9 @@ struct MatchScope {
 SDNode *SelectionDAGISel::
 SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
                  unsigned TableSize) {
+  // wak: NodeToMatchは，SelectCode(N)のN
+  // wak: MatcherTableは，テーブルまるごと
+
   // FIXME: Should these even be selected?  Handle these cases in the caller?
   switch (NodeToMatch->getOpcode()) {
   default:
