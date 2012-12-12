@@ -1,3 +1,6 @@
+// ECCマークがIRに付いているかを確認するために作ったパス．
+// もう存在価値がない．
+
 #define DEBUG_TYPE "wak-ecc-check"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Analysis/Dominators.h"

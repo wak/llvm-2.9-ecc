@@ -1,3 +1,5 @@
+// MachineFunctionPassテスト用．書いてあることに意味はない
+// クラス名がいまいち…．X86WakTestにしておけばよかった．
 
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
@@ -49,45 +51,44 @@ INITIALIZE_PASS_BEGIN(WakTest, "wak-machine-pass", "Wak MachinePass", false, fal
 INITIALIZE_PASS_END(WakTest, "wak-machine-pass", "Wak MachinePass", false, false)
 
 FunctionPass *llvm::createX86WakTest(X86TargetMachine &TM, llvm::CodeGenOpt::Level OptLevel) {
-	return new WakTest();
+  return new WakTest();
 }
 
 WakTest::WakTest() : MachineFunctionPass(ID), FnNum(-1) {
-	initializeWakTestPass(*PassRegistry::getPassRegistry());
+  initializeWakTestPass(*PassRegistry::getPassRegistry());
 }
 
 bool WakTest::runOnMachineFunction(MachineFunction &MF) {
-	errs() << "wak: Processing function (" << ++FnNum <<  ") \'"
-	       << MF.getFunction()->getName() << "\'\n";
+  errs() << "wak: Processing function (" << ++FnNum <<  ") \'"
+         << MF.getFunction()->getName() << "\'\n";
 
-	TLI = MF.getTarget().getTargetLowering();
-	TII = MF.getTarget().getInstrInfo();
-	TRI = MF.getTarget().getRegisterInfo();
-	InstrItins = MF.getTarget().getInstrItineraryData();
-	if (!TII)
-		return false;
+  TLI = MF.getTarget().getTargetLowering();
+  TII = MF.getTarget().getInstrInfo();
+  TRI = MF.getTarget().getRegisterInfo();
+  InstrItins = MF.getTarget().getInstrItineraryData();
+  if (!TII)
+    return false;
 
-	for (MachineFunction::iterator mbbi = MF.begin(), E = MF.end(); mbbi != E; ++mbbi) {
-		// mbbi: MachineBasicBlock Iterator
+  for (MachineFunction::iterator mbbi = MF.begin(), E = MF.end(); mbbi != E; ++mbbi) {
+    // mbbi: MachineBasicBlock Iterator
 
-		for (MachineBasicBlock::iterator mii = mbbi->begin(); mii != mbbi->end(); ++mii) {
-			// mii: MachineInstr Iterator
+    for (MachineBasicBlock::iterator mii = mbbi->begin(); mii != mbbi->end(); ++mii) {
+      // mii: MachineInstr Iterator
       // *miiは，MachineInstr
-			// アーキテクチャ依存の命令（SUB64ri8レベル）は，TargetInstrDescに格納されている
-			// mii::getDescでTargetInstrDescが取得できる
+      // アーキテクチャ依存の命令（SUB64ri8レベル）は，TargetInstrDescに格納されている
+      // mii::getDescでTargetInstrDescが取得できる
 
-			errs() << "  opcode: " << mii->getDesc().getName()
-			       << "(" <<  mii->getOpcode() << ")" << "\n";
+      errs() << "  opcode: " << mii->getDesc().getName()
+             << "(" <<  mii->getOpcode() << ")" << "\n";
 
-			if (mii->getOpcode() != 1424) // MOV64mr 1424
-				continue;
-			errs() << "  Insert >>>>>>>\n";
-			MachineInstr *instr = MF.CreateMachineInstr(TII->get(X86::SYSEXIT), mii->getDebugLoc(), true);
-			mbbi->insert(mii, instr);
-			errs() << "  <<<<<<<<<<<<<<\n";
-		}
-	}
-	return true;
+      if (mii->getOpcode() != 1424) // MOV64mr 1424
+        continue;
+      errs() << "  Insert >>>>>>>\n";
+      MachineInstr *instr = MF.CreateMachineInstr(TII->get(X86::SYSEXIT), mii->getDebugLoc(), true);
+      mbbi->insert(mii, instr);
+      errs() << "  <<<<<<<<<<<<<<\n";
+    }
+  }
+  return true;
 }
 
-//static RegisterPass<WakTest> X("wak-machine", "Wak machine function pass", false, false);

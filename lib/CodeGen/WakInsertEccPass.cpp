@@ -1,3 +1,6 @@
+// 汎用ECC実装
+//   具体的なアルゴリズムやデータ構造は，ライブラリに任せている．
+
 #define DEBUG_TYPE "wak-insert-ecc"
 #include <sstream>
 #include "llvm/CodeGen/Passes.h"

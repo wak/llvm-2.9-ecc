@@ -1,3 +1,6 @@
+// 二重化をFunctionPassで実装できるかのテスト．
+// 今は，汎用実装のWakInsertEccに移行済み．遅いけれど．
+
 #define DEBUG_TYPE "wak-duplicate-insn-test"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Analysis/Dominators.h"

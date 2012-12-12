@@ -1,3 +1,5 @@
+// 二重化をMachineFunctionPassでやろうとした名残り．
+// MFPでやろうと思ったけれど，大変なのでWakHammingEccに移行しています．
 
 #include "llvm/Pass.h"
 #include "llvm/Instructions.h"
