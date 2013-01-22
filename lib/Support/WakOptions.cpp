@@ -2,77 +2,33 @@
 #include "llvm/WakOptions.h"
 
 namespace llvm {
-cl::opt<bool>
-OptEccIR("wak-print-ecc", cl::Hidden,
-         cl::desc("命令ダンプにECC情報を付ける"));
+#define DEF_SWITCH(id, name, description) cl::opt<bool> id (name, cl::Hidden, cl::desc(description))
 
+// ECC用
+DEF_SWITCH(OptWakRegAlloc, "wak-reg-alloc", "レジスタ強制する");
+DEF_SWITCH(OptWakInsertEccPass , "wak-insert-ecc"      , "ECC用の命令を追加する（IR実装: WakInsertEccPass）");
+DEF_SWITCH(OptWakInsertEccStore, "wak-insert-ecc-store", "[storeのみ]ECC用の命令を追加する（IR実装: WakInsertEccPass）");
+DEF_SWITCH(OptWakInsertEccLoad , "wak-insert-ecc-load" , "[loadのみ]ECC用の命令を追加する（IR実装: WakInsertEccPass）");
 
-cl::opt<bool>
-OptWakDebugAroundTargetMachine("wak-debug-target-machine", cl::Hidden,
-                               cl::desc("LLVMTargetMachine.cpp関連のデバッグ情報を表示"));
+// デバッグ用
+DEF_SWITCH(OptEccIR, "wak-print-ecc", "命令ダンプにECC情報を付ける");
+DEF_SWITCH(OptWakColor, "wak-color", "カラー表示する");
+DEF_SWITCH(OptWakDebugInsertEcc, "wak-debug-insert-ecc", "ECC命令を追加するパスで，どの命令を処理しているかを詳細に表示する");
+DEF_SWITCH(OptWakDebugRegAlloc , "wak-debug-reg-alloc" , "レジスタ割付けを行うパスで，処理情報を詳細に表示する");
 
+// 過去の遺物
+DEF_SWITCH(OptWakDebugAroundTargetMachine   , "wak-debug-target-machine", "LLVMTargetMachine.cpp関連のデバッグ情報を表示");
+DEF_SWITCH(OptWakDebugAroundMBB             , "wak-debug-around-mbb"    , "MachineBasicBlock関連のデバッグ情報を出す(命令選択付近)");
+DEF_SWITCH(OptWakDebugSDB                   , "wak-debug-sdb "          , "SelectionDAGBuilder.cppのデバッグ情報");
+DEF_SWITCH(OptWakDebugISel                  , "wak-debug-isel"          , "命令選択のデバッグ情報");
+DEF_SWITCH(OptWakDebugPass                  , "wak-debug-pass"          , "パス関連のデバッグ情報");
+DEF_SWITCH(OptWakDebugEmitter               , "wak-debug-emitter"       , "asm,binaryエミッタ関連");
+DEF_SWITCH(OptWakDebugSay                   , "wak-debug-say"           , "誰が呼ばれたか自己主張");
+DEF_SWITCH(OptWakAddFunctionPass            , "wak-add-FP"              , "FunctionPass WakTestをパスに追加");
+DEF_SWITCH(OptWakAddMachineFunctionPass     , "wak-add-MFP"             , "MachineFunctionPass WakEccCheckPassをパスに追加");
+DEF_SWITCH(OptWakAddDuplicateInsnTestPass   , "wak-add-DIT"             , "ECC値複製用のを命令を挿入するパスを追加 (WakDuplicateInsnTestPass)");
+DEF_SWITCH(OptWakAddX86DuplicateInsnTestPass, "wak-add-DIT-MFP"         , "MachineFunctionPass WakDuplicateTestPassをパスに追加");
+DEF_SWITCH(OptWakHammingEccPass             , "wak-add-hamming-FP"      , "MachineFunctionPass WakDuplicateTestPassをパスに追加");
 
-cl::opt<bool>
-OptWakDebugAroundMBB("wak-debug-around-mbb", cl::Hidden,
-                    cl::desc("MachineBasicBlock関連のデバッグ情報を出す(命令選択付近)"));
-
-cl::opt<bool>
-OptWakDebugSDB("wak-debug-sdb", cl::Hidden,
-               cl::desc("SelectionDAGBuilder.cppのデバッグ情報"));
-
-
-cl::opt<bool>
-OptWakDebugISel("wak-debug-isel", cl::Hidden,
-                cl::desc("命令選択のデバッグ情報"));
-
-cl::opt<bool>
-OptWakDebugPass("wak-debug-pass", cl::Hidden,
-                cl::desc("パス関連のデバッグ情報"));
-
-cl::opt<bool>
-OptWakDebugEmitter("wak-debug-emitter", cl::Hidden,
-                   cl::desc("asm,binaryエミッタ関連"));
-
-cl::opt<bool>
-OptWakDebugSay("wak-debug-say", cl::Hidden,
-                   cl::desc("誰が呼ばれたか自己主張"));
-
-cl::opt<bool>
-OptWakAddFunctionPass("wak-add-FP", cl::Hidden,
-                      cl::desc("FunctionPass WakTestをパスに追加"));
-
-cl::opt<bool>
-OptWakAddMachineFunctionPass("wak-add-MFP", cl::Hidden,
-                             cl::desc("MachineFunctionPass WakEccCheckPassをパスに追加"));
-
-
-cl::opt<bool>
-OptWakInsertEccPass("wak-insert-ecc", cl::Hidden,
-                    cl::desc("ECC用の命令を追加する（IR実装: WakInsertEccPass）"));
-cl::opt<bool>
-OptWakInsertEccStore("wak-insert-ecc-store", cl::Hidden,
-                     cl::desc("[storeのみ]ECC用の命令を追加する（IR実装: WakInsertEccPass）"));
-cl::opt<bool>
-OptWakInsertEccLoad("wak-insert-ecc-load", cl::Hidden,
-                    cl::desc("[loadのみ]ECC用の命令を追加する（IR実装: WakInsertEccPass）"));
-
-
-cl::opt<bool>
-OptWakAddDuplicateInsnTestPass("wak-add-DIT", cl::Hidden,
-                               cl::desc("ECC値複製用のを命令を挿入するパスを追加 (WakDuplicateInsnTestPass)"));
-
-cl::opt<bool>
-OptWakAddX86DuplicateInsnTestPass("wak-add-DIT-MFP", cl::Hidden,
-                                  cl::desc("MachineFunctionPass WakDuplicateTestPassをパスに追加"));
-
-
-cl::opt<bool>
-OptWakHammingEccPass("wak-add-hamming-FP", cl::Hidden,
-                     cl::desc("MachineFunctionPass WakDuplicateTestPassをパスに追加"));
-
-
-cl::opt<bool> OptWakRegAlloc("wak-reg-alloc", cl::Hidden,cl::desc("レジスタ強制する"));
-
-cl::opt<bool> OptWakColor("wak-color", cl::Hidden,cl::desc("カラー表示する"));
-
+#undef DEF_SWITCH
 }

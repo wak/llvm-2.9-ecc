@@ -174,7 +174,7 @@ namespace {
       }
 
       // キャスト情報確認
-      if (true) {
+      if (OptWakDebugInsertEcc) {
         errs() << "  cast: orig=";
         dataType->print(errs());
         errs() << ", from=";
@@ -239,19 +239,24 @@ namespace {
     int countPointerWraps(const Type *type) {
       int count;
 
-      errs() << "  (count: ";
+      if (OptWakDebugInsertEcc)
+        errs() << "  (count: ";
       for (count = 0; type->isPointerTy(); count++) {
-        if (count != 0)
+        if (OptWakDebugInsertEcc && count != 0)
           errs() << "->";
         type = type->getContainedType(0);
-        type->print(errs());
+        if (OptWakDebugInsertEcc)
+          type->print(errs());
         if (const ArrayType *aryTy = dyn_cast<ArrayType>(type)) {
           type = aryTy->getContainedType(0);
-          errs() << "=";
-          type->print(errs());
+          if (OptWakDebugInsertEcc) {
+            errs() << "=";
+            type->print(errs());
+          }
         }
       }
-      errs() << ") ";
+      if (OptWakDebugInsertEcc)
+        errs() << ") ";
       return count;
     }
 
@@ -287,7 +292,7 @@ namespace {
       const Value *currentValue = pointerOperand;
       while (true) {
         if (currentValue->isecc)
-          break;
+          goto end_of_find_first_def_loop;
 
         if (const LoadInst *loadInst = dyn_cast<LoadInst>(currentValue)) {
           // ポインタを剥がす場合は，load命令が入る
@@ -297,12 +302,21 @@ namespace {
           // ただのアドレス計算に使われているだけなので，基底ポインタを取得する
           currentValue = gepInst->getPointerOperand();
         } else if (const ConstantExpr *expr = dyn_cast<ConstantExpr>(currentValue)) {
-          if (expr->getOpcode() == Instruction::GetElementPtr &&
-              expr->getNumOperands() > 0) {
-            currentValue = expr->getOperand(0);
-          } else {
+          switch (expr->getOpcode()) {
+          case Instruction::GetElementPtr:
+            if (expr->getNumOperands() > 0)
+              currentValue = expr->getOperand(0);
+            continue;
+          case Instruction::IntToPtr:
+            // 整数型をポインタにキャストする場合は，最初の定義点は，キャスト後の値になる．
+            // currentValue = expr;
+            goto end_of_find_first_def_loop;
+          default:
             errs() << "[Unsupported ConstantExpr: " << expr->getOpcode()
-                   << "  INST: " << Instruction::GetElementPtr << "]\n";
+                   << "  INST: " << Instruction::GetElementPtr << "] at ";
+            errs().write_escaped(FUNC->getName());
+            errs() << "\n";
+            goto end_of_find_first_def_loop;
           }
         } else if (const CastInst *castInst = dyn_cast<CastInst>(currentValue)) {
           // @todo: 他のケースもあるはず．余計な影響を与えないかチェック
@@ -310,9 +324,10 @@ namespace {
           //if (castInst->getDestTy()->isPointerTy())
           currentValue = castInst->getOperand(0);
         } else {
-          break;
+          goto end_of_find_first_def_loop;
         }
       }
+      end_of_find_first_def_loop:
 
       if (currentValue && !currentValue->isecc)
         return NULL;
@@ -322,40 +337,48 @@ namespace {
       int rootWraps       = countPointerWraps(currentValue->getType());
       assert(toWraps <= rootWraps);
 
-      errs() << "RL = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps << " => ";
+      if (OptWakDebugInsertEcc)
+        errs() << "RL = " << protectRefLevel << ", root = " << rootWraps << ", to = " << toWraps << " => ";
 
       if (!level_check) {
-        errs() << "protected (no level_check)\n";
+        if (OptWakDebugInsertEcc)
+          errs() << "protected (no level_check)\n";
         return const_cast<Value *>(currentValue);
       }
 
       if (protectRefLevel < 0) {
-        errs() << "protected\n";
+        if (OptWakDebugInsertEcc)
+          errs() << "protected\n";
         return const_cast<Value *>(currentValue);
       }
 
       // StoreのpointerOperandは，変更したいアドレスへのポインタなので，
       // 一つポインタが多く被さっている．そのため，+1が必要．
       if (toWraps <= protectRefLevel + 1) {
-        errs() << "protected\n";
+        if (OptWakDebugInsertEcc)
+          errs() << "protected\n";
         return const_cast<Value *>(currentValue);
       }
-
-      errs() << "not-protected\n";
+      if (OptWakDebugInsertEcc)
+        errs() << "not-protected\n";
       return NULL;
     }
 
     // 引数: pointerOperand: loadまたはstore命令のオペランド
     // 戻り値: 操作対象は，ポインタルールを適用すべきか？
     bool shouldUsePointerRule(Value *pointerOperand, bool debug = true) {
+      //pointerOperand->dump();
+
       const Type *destTy = pointerOperand->getType();
 
       // store,loadのオペランドはポインタのはず
       assert(destTy->isPointerTy() && "operand must pointer");
 
 
-      if (CastInst *castInst = dyn_cast<CastInst>(pointerOperand))
-        return shouldUsePointerRule(castInst->getOperand(0));
+      if (CastInst *castInst = dyn_cast<CastInst>(pointerOperand)) {
+        // キャスト対象の値を生成した命令を見る．
+        return shouldUsePointerRule(castInst->getOperand(0), debug);
+      }
 
       // 間にload命令が挟まっている場合は，ポインタを剥がして代入するケース
       if (dyn_cast<LoadInst>(pointerOperand)) {
@@ -370,7 +393,7 @@ namespace {
           errs() << "  [array element or struct member] ";
         return true;
       }
-
+      
       // アドレスが固定の配列・構造体メンバ（例: グローバル変数）
       if (ConstantExpr *expr = dyn_cast<ConstantExpr>(pointerOperand)) {
         if (debug)
@@ -378,9 +401,16 @@ namespace {
         if (expr->getOpcode() == Instruction::GetElementPtr &&
             expr->getNumOperands() > 0) {
           return true;
+        } else if (expr->getOpcode() == Instruction::IntToPtr) {
+          // ポインタルールを使うかは，変数定義による．
+          // 例: 必要: void *ptr _ecc_ = (void *) 0x100;
+          return true;
         } else {
+          // see. Instruction.def
           errs() << "  [Unsupported ConstantExpr: OP: " << expr->getOpcode()
-                 << "  INST: " << Instruction::GetElementPtr << "] ";
+                 << "    INST: " << Instruction::GetElementPtr << "] at ";
+          errs().write_escaped(FUNC->getName());
+          errs() << "\n";
         }
       }
 
@@ -403,17 +433,18 @@ namespace {
     Value *getEccProtectedOperand(Value *pointerOperand) {
       // pointerOperandは，アドレス操作されて取得されたものか？
       // （ポインタ・配列・構造体メンバ）
-      if (shouldUsePointerRule(pointerOperand)) {
+      if (shouldUsePointerRule(pointerOperand, OptWakDebugInsertEcc)) {
         if (Value *operand = checkPointerHasEccValue(pointerOperand))
           return operand;
-        errs() << "\n";
+        if (OptWakDebugInsertEcc)
+          errs() << "\n";
         return NULL;
       }
 
       // 非ポインタ変数アクセス
       if (pointerOperand->isecc) {
-        errs() << "  [var] ";
-        errs() << "\n";
+        if (OptWakDebugInsertEcc)
+          errs() << "  [var] \n";
         return pointerOperand;
       }
 
@@ -449,7 +480,8 @@ namespace {
       if (!storeInst->getValueOperand()->getType()->isPointerTy())
         return;
 
-      errs() << "\x1b[1;33m  check warn: \x1b[m\n";
+      if (OptWakDebugInsertEcc)
+        errs() << "\x1b[1;33m  check warn: \x1b[m\n";
 
       const Value *lValue = checkPointerHasEccValue(storeInst->getPointerOperand(), false);
       const Value *rValue = checkPointerHasEccValue(storeInst->getValueOperand(), false);
@@ -486,8 +518,10 @@ namespace {
           }
 
           if (!allOperandsAreEccRelated) {
-            errs() << "wak: [debug] clear ComputeEccRelated of ";
-            Inst->dump();
+            if (OptWakDebugInsertEcc) {
+              errs() << "wak: [debug] clear ComputeEccRelated of ";
+              Inst->dump();
+            }
             clearEccComputeInfo(Inst);
             continue;
           }
@@ -502,8 +536,10 @@ namespace {
             Inst->eccComputeInfo = EccComputeInfo::ComputeEccRelatedEnd;
           } else {
             // すべてのオペランドがECC計算関連なので，この命令も計算に含める
-            errs() << "wak: [debug] attach ComputeEccRelated to ";
-            Inst->dump();
+            if (OptWakDebugInsertEcc) {
+              errs() << "wak: [debug] attach ComputeEccRelated to ";
+              Inst->dump();
+            }
             Inst->isEccRelated   = true;
             Inst->eccComputeInfo = EccComputeInfo::ComputeEccRelated;
           }
@@ -515,15 +551,18 @@ namespace {
       bool doStore = (OptWakInsertEccPass || OptWakInsertEccStore);
       bool doLoad  = (OptWakInsertEccPass || OptWakInsertEccLoad);
 
-      errs() << "Wak Insert ECC Pass Configuration";
-      errs() << "\n  store: " << doStore;
-      errs() << "\n  load : " << doLoad;
-      errs() << "\n\n";
+      if (OptWakDebugInsertEcc) {
+        errs() << "Wak Insert ECC Pass Configuration";
+        errs() << "\n  store: " << doStore;
+        errs() << "\n  load : " << doLoad;
+        errs() << "\n\n";
+      }
 
       bool changed = false;
       int inserted_inst_count = 0;
 
-      errs() << "- [ECC: for store and load]\n";
+      if (OptWakDebugInsertEcc)
+        errs() << "- [ECC: for store and load]\n";
 
       for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
         // 各ブロックを処理する
@@ -532,16 +571,18 @@ namespace {
           // 各命令を処理する
 
           // 今，どの命令を処理しているのかを表示する
-          errs() << " inst: ";
-          if (I->getOpcode() == Instruction::Load || I->getOpcode() == Instruction::Store)
-            errs() << "\x1b[1;31m"; // Change color to bold red
-          if (inserted_inst_count > 0) {
-            inserted_inst_count--;
-            errs() << "\x1b[1;35m"; // Change color to bold magenta
+          if (OptWakDebugInsertEcc) {
+            errs() << " inst: ";
+            if (I->getOpcode() == Instruction::Load || I->getOpcode() == Instruction::Store)
+              errs() << "\x1b[1;31m"; // Change color to bold red
+            if (inserted_inst_count > 0) {
+              inserted_inst_count--;
+              errs() << "\x1b[1;35m"; // Change color to bold magenta
+            }
+            errs() << I->getOpcodeName(); errs() << "\x1b[m\t";
+            I->print(errs());
+            errs() << "\n";
           }
-          errs() << I->getOpcodeName(); errs() << "\x1b[m\t";
-          I->print(errs());
-          errs() << "\n";
 
           // @memo 以下の処理で，新たに命令が挿入される場合がある．挿入された命令
           // は，次のループで見つかる．現状では，storeとload命令が挿入されること
@@ -574,7 +615,8 @@ namespace {
           }
         }
       }
-      errs() << "\n";
+      if (OptWakDebugInsertEcc)
+        errs() << "\n";
 
       return changed;
     }
@@ -583,17 +625,23 @@ namespace {
       bool changed = false;
       FUNC = &F;
 
-      errs() << "--- [Wak insert duplicate instuction test] ---\n";
-      errs() << "Function: ";
-      errs().write_escaped(F.getName());
-      errs() << "\n\n";
+      if (!OptWakInsertEccPass && !OptWakInsertEccStore && OptWakInsertEccLoad)
+        return false;
+
+      if (OptWakDebugInsertEcc) {
+        errs() << "--- [Wak insert duplicate instuction test] ---\n";
+        errs() << "Function: ";
+        errs().write_escaped(F.getName());
+        errs() << "\n\n";
+      }
 
       changed = insertInstructions(F);
       if (changed) {
         fixEccComputeInfo(F);
       }
 
-      errs() << "\n-------------------- [wak] --------------------\n\n";
+      if (OptWakDebugInsertEcc)
+        errs() << "\n-------------------- [wak] --------------------\n\n";
       return changed;
     }
 

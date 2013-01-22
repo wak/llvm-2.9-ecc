@@ -347,8 +347,9 @@ void RAFast::spillVirtReg(MachineBasicBlock::iterator MI,
 
     // wak: wak専用レジスタがspillされようとしていたら，やめさせる
     if (OptWakRegAlloc && isWakRegister(LR.PhysReg)) {
-      errs() << "\nwak: register " << PrintReg(LR.PhysReg, TRI)
-             << " is going to spill, but it is wak Register. Spill is canceled force !!\n";
+      if (OptWakDebugRegAlloc)
+        errs() << "\nwak: register " << PrintReg(LR.PhysReg, TRI)
+               << " is going to spill, but it is wak Register. Spill is canceled force !!\n";
       LR.LastUse = 0; // Don't kill register again @todo: これは必要か？
       goto end;
     }
@@ -718,13 +719,15 @@ RAFast::reloadVirtReg(MachineInstr *MI, unsigned OpNum,
   MachineOperand &MO = MI->getOperand(OpNum);
 
   // wak: すでに，レジスタ強制していた場合，それをもう一度割り付ける
-  errs() << "wak: Reload info: VReg = " << PrintReg(VirtReg, TRI)
-         << ", forcedReg = " << PrintReg(wakForceVRegToPRegMap[VirtReg], TRI) << "\n";
+  if (OptWakDebugRegAlloc)
+    errs() << "wak: Reload info: VReg = " << PrintReg(VirtReg, TRI)
+           << ", forcedReg = " << PrintReg(wakForceVRegToPRegMap[VirtReg], TRI) << "\n";
   if (wakForceVRegToPRegMap[VirtReg]) {
     assert(mustUseWakPhysReg == 0 && "レジスタ強制中にReloadが発生した");
     mustUseWakPhysReg = Hint = wakForceVRegToPRegMap[VirtReg];
-    errs() << "wak: Relaoding already force allocated register ("
-           << PrintReg(mustUseWakPhysReg, TRI) <<  ")\n";
+    if (OptWakDebugRegAlloc)
+      errs() << "wak: Relaoding already force allocated register ("
+             << PrintReg(mustUseWakPhysReg, TRI) <<  ")\n";
   }
 
   if (New) {
@@ -734,10 +737,12 @@ RAFast::reloadVirtReg(MachineInstr *MI, unsigned OpNum,
     DEBUG(dbgs() << "Reloading " << PrintReg(VirtReg, TRI) << " into "
                  << PrintReg(LR.PhysReg, TRI) << "\n");
     // wak: wak専用レジスタがreloadされようとしたら，やめさせる
-    if (OptWakRegAlloc && isWakRegister(LR.PhysReg))
-      errs() << "wak: register " << PrintReg(LR.PhysReg, TRI)
-             << " is going to reload, but it is wak Register. Reload is canceled force !!\n";
-    else
+    if (OptWakRegAlloc && isWakRegister(LR.PhysReg)) {
+      if (OptWakDebugRegAlloc)
+        errs() << "wak: register " << PrintReg(LR.PhysReg, TRI)
+               << " is going to reload, but it is wak Register. Reload is canceled force !!\n";
+      // do nothing
+    } else
       TII->loadRegFromStackSlot(*MBB, MI, LR.PhysReg, FrameIndex, RC, TRI);
     ++NumLoads;
   } else if (LR.Dirty) {
@@ -931,7 +936,8 @@ void RAFast::AllocateBasicBlock() {
       // wak: TRI = TargetRegisterInfo
       // wak: live in: 関数の引数のレジスタ
       // wak: live out: 関数の戻り値のレジスタ
-      errs() << "wak: addRegisterKilled(" << TRI->getName(*I) << ")\n";
+      if (OptWakDebugRegAlloc)
+        errs() << "wak: addRegisterKilled(" << TRI->getName(*I) << ")\n";
 
       // addRegisterKilled:
       //   We have determined MI kills a register. Look for the operand that
@@ -1328,7 +1334,8 @@ void RAFast::AllocateBasicBlock() {
           wakRegisterLotate();  // 使うレジスタを変更する
         } else {
           const TargetRegisterClass *RC = MRI->getRegClass(MO.getReg());
-          errs() << "wak: Operand size is " << RC->getSize() << "bytes\n";
+          if (OptWakDebugRegAlloc)
+            errs() << "wak: Operand size is " << RC->getSize() << "bytes\n";
           wantToAllocateReg = wakRegisterForBytes(RC->getSize());
         }
 
@@ -1340,7 +1347,7 @@ void RAFast::AllocateBasicBlock() {
       }
       wak_alloc:
 
-      if (mustUseWakPhysReg)
+      if (mustUseWakPhysReg && OptWakDebugRegAlloc)
         errs() << "wak: I want allocate " << PrintReg(Reg, TRI)
                << " to " << PrintReg(mustUseWakPhysReg, TRI) << "\n";
 

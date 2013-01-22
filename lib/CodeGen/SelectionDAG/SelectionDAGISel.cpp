@@ -938,10 +938,9 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
 
     // wak: [removed] FastISで命令選択
 
-    if (Begin != BI) {
+    if (Begin != BI)
       ++NumDAGBlocks;           // wak: まだ残りがある
-      errs() << "wak: error: FastIsel may worked ?\n";
-    } else
+    else
       ++NumFastIselBlocks;      // wak: すべてFastIselでできた？
 
     // Run SelectionDAG instruction selection on the remainder of the block

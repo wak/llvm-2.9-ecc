@@ -2432,8 +2432,8 @@ void SelectionDAGBuilder::visitFSub(const User &I) {
 }
 
 void SelectionDAGBuilder::visitBinary(const User &I, unsigned OpCode) {
-  errs() << "wak: (code reading) visitBinary(I, " << ISD::ADD << ")\n";
-  I.dump();
+  //errs() << "wak: (code reading) visitBinary(I, " << ISD::ADD << ")\n";
+  //I.dump();
 
   SDValue Op1 = getValue(I.getOperand(0));
   SDValue Op2 = getValue(I.getOperand(1));

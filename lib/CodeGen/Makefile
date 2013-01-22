@@ -9,6 +9,8 @@
 
 LEVEL = ../..
 LIBRARYNAME = LLVMCodeGen
+
+# CallGraph/ directory is wak's pass
 PARALLEL_DIRS = SelectionDAG AsmPrinter
 BUILD_ARCHIVE = 1
 

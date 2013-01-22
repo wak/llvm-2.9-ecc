@@ -32,6 +32,8 @@ namespace llvm {
 
   /* 開発補助 */
   extern cl::opt<bool> OptWakColor;
+  extern cl::opt<bool> OptWakDebugInsertEcc;
+  extern cl::opt<bool> OptWakDebugRegAlloc;
 }
 
 #endif
